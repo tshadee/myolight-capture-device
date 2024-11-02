@@ -23,9 +23,9 @@
 #define OVERRANGE_SET_B_REG_ADDR static_cast<uint8_t>(0xB)
 #define LPF_CONFIG_REG_ADDR static_cast<uint8_t>(0xD)
 #define SEQ_STACK_BASE_REG_ADDR static_cast<uint8_t>(0x20)
-#define SEQ_STACK_REG_ADDR(n) static_cast<uint8_t>(SEQ_STACK_BASE_REG + (n))  //until n = 31
+#define SEQ_STACK_REG_ADDR(n) static_cast<uint8_t>(SEQ_STACK_BASE_REG + (n))  // until n = 31
 
-#define READBACK_MASK 0x7E00
+#define READBACK_MASK 0x7E00  // 0b011111110_0x00
 
 enum class cfgProfile
 {
@@ -37,4 +37,4 @@ enum class cfgProfile
     HighOSR
 };
 
-#endif //ADS_REG_DEFAULTS_H
+#endif  // ADS_REG_DEFAULTS_H
