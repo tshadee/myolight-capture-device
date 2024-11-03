@@ -43,7 +43,7 @@ class ADS8686S_SPI_Handler
     void SPI_close(void);
     void SPI_transact(int mode);
     void configureADC(cfgProfile configProfile);
-    void configureArr(enum ADCConfigModes);
+    void configureArr(cfgProfile configProfile);
     void initiateSample(void);
     bool verifyADSFunction(void);
 };

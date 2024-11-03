@@ -15,14 +15,8 @@ ADS8686S_SPI_Handler::ADS8686S_SPI_Handler(int SDI, int SDO, int CS, int SCLK, i
                 SEQ_STACK_0_DEFAULT_CFG, SEQ_STACK_1_DEFAULT_CFG, SEQ_STACK_2_DEFAULT_CFG,
                 SEQ_STACK_3_DEFAULT_CFG}
 {
-    for (int i = 0; i < rxBufferDepth; i++)
-    {
-        rxBuffer[i] = 0x00;
-    };
-    for (int i = 0; i < txBufferDepth; i++)
-    {
-        txBuffer[i] = 0x00;
-    };
+    std::fill(std::begin(txBuffer), std::end(txBuffer), 0);
+    std::fill(std::begin(rxBuffer), std::end(rxBuffer), 0);
 };
 
 void ADS8686S_SPI_Handler::SPI_start(void)
