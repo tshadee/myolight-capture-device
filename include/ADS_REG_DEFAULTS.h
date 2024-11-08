@@ -1,3 +1,4 @@
+#pragma once
 #ifndef ADS_REG_DEFAULTS_H
 #define ADS_REG_DEFAULTS_H
 
@@ -27,14 +28,14 @@
 
 #define READBACK_MASK 0x7E00  // 0b011111110_0x00
 
-enum class cfgProfile
-{
-    Default,
-    SingleSample,
-    SingleChannel,
-    SweepManualCS,
-    SweepBurstSEQEN,
-    HighOSR
-};
+// enum cfgProfile
+// {
+//     Default,
+//     SingleSample,
+//     SingleChannel,
+//     SweepManualCS,
+//     SweepBurstSEQEN,
+//     HighOSR
+// };
 
 #endif  // ADS_REG_DEFAULTS_H

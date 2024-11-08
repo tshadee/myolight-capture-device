@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <SPI.h>
 #include <WiFi.h>
 #include <WiFiAP.h>
 #include <WiFiClient.h>
@@ -16,6 +17,8 @@ unsigned long counter = 0;
 uint32_t wifiBuffer[WIFI_BUFFER_SIZE_BYTES];  // BUFFER_SIZE*32 bits per transmission
 uint16_t bufferIndex = 0;
 WiFiServer server(WIFI_PORT);  // port DOOM 666
+SPIClass vspi(FSPI);
+ADS8686S_SPI_Handler* ADC;
 // MOSI 18
 // MISO 20
 // SCK 19
@@ -25,6 +28,8 @@ void setup()
 {
     pinMode(LED_BUILTIN, OUTPUT);
     Serial.begin(9600);
+    vspi.begin();
+    ADC = new ADS8686S_SPI_Handler(D9, D10, D7, D8, D6, D5, D4, &vspi);
 
     if (!WiFi.softAP(WIFI_SSID, WIFI_PASSWORD, WIFI_CHANNEL, WIFI_SSID_HIDDEN, WIFI_CONNECTIONS,
                      false, WIFI_AUTH_WPA2_PSK))  // start access point
