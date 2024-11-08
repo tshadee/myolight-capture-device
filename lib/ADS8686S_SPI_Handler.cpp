@@ -14,10 +14,12 @@ ADS8686S_SPI_Handler::ADS8686S_SPI_Handler(uint8_t SDI, uint8_t SDO, uint8_t CS,
       configArr{CONFIG_DEFAULT_CFG,      RANGE_A1_DEFAULT_CFG,    RANGE_A2_DEFAULT_CFG,
                 RANGE_B1_DEFAULT_CFG,    RANGE_B2_DEFAULT_CFG,    LPF_DEFAULT_CFG,
                 SEQ_STACK_0_DEFAULT_CFG, SEQ_STACK_1_DEFAULT_CFG, SEQ_STACK_2_DEFAULT_CFG,
-                SEQ_STACK_3_DEFAULT_CFG} {
-          // std::fill(std::begin(txBuffer), std::end(txBuffer), 0);
-          // std::fill(std::begin(rxBuffer), std::end(rxBuffer), 0);
-      };
+                SEQ_STACK_3_DEFAULT_CFG}
+
+{
+    std::fill(std::begin(txBuffer), std::end(txBuffer), 0);
+    std::fill(std::begin(rxBuffer), std::end(rxBuffer), 0);
+};
 
 void ADS8686S_SPI_Handler::SPI_open(void)
 {
@@ -83,8 +85,9 @@ void ADS8686S_SPI_Handler::setTransmitBuffer(uint16_t* data)
     };
 };
 
-void ADS8686S_SPI_Handler::clearReceiveBuffer(void) {
-    // std::fill(std::begin(rxBuffer), std::end(rxBuffer), 0);
+void ADS8686S_SPI_Handler::clearReceiveBuffer(void)
+{
+    std::fill(std::begin(rxBuffer), std::end(rxBuffer), 0);
 };
 
 void ADS8686S_SPI_Handler::configureADC(int configProfile)  // ONLY CALL THIS ONCE

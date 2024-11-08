@@ -2,40 +2,40 @@
 #ifndef ADS_REG_DEFAULTS_H
 #define ADS_REG_DEFAULTS_H
 
-#define CONFIG_DEFAULT_CFG 0x8460
-#define RANGE_A1_DEFAULT_CFG 0x8855
-#define RANGE_A2_DEFAULT_CFG 0x8A55
-#define RANGE_B1_DEFAULT_CFG 0x8C55
-#define RANGE_B2_DEFAULT_CFG 0x8E55
-#define LPF_DEFAULT_CFG 0x9A02
-#define SEQ_STACK_0_DEFAULT_CFG 0xC047
-#define SEQ_STACK_1_DEFAULT_CFG 0xC256
-#define SEQ_STACK_2_DEFAULT_CFG 0xC465
-#define SEQ_STACK_3_DEFAULT_CFG 0xC57B
+#define CONFIG_DEFAULT_CFG 0x8460U
+#define RANGE_A1_DEFAULT_CFG 0x8855U
+#define RANGE_A2_DEFAULT_CFG 0x8A55U
+#define RANGE_B1_DEFAULT_CFG 0x8C55U
+#define RANGE_B2_DEFAULT_CFG 0x8E55U
+#define LPF_DEFAULT_CFG 0x9A02U
+#define SEQ_STACK_0_DEFAULT_CFG 0xC047U
+#define SEQ_STACK_1_DEFAULT_CFG 0xC256U
+#define SEQ_STACK_2_DEFAULT_CFG 0xC465U
+#define SEQ_STACK_3_DEFAULT_CFG 0xC57BU
 
-#define CONFIGURATION__REG_ADDR static_cast<uint8_t>(0x2)
-#define CHANNEL_SEL_REG_ADDR static_cast<uint8_t>(0x3)
-#define RANGE_A1_REG_ADDR static_cast<uint8_t>(0x4)
-#define RANGE_A2_REG_ADDR static_cast<uint8_t>(0x5)
-#define RANGE_B1_REG_ADDR static_cast<uint8_t>(0x6)
-#define RANGE_B2_REG_ADDR static_cast<uint8_t>(0x7)
-#define STATUS_REG_ADDR static_cast<uint8_t>(0x8)
-#define OVERRANGE_SET_A_REG_ADDR static_cast<uint8_t>(0xA)
-#define OVERRANGE_SET_B_REG_ADDR static_cast<uint8_t>(0xB)
-#define LPF_CONFIG_REG_ADDR static_cast<uint8_t>(0xD)
-#define SEQ_STACK_BASE_REG_ADDR static_cast<uint8_t>(0x20)
+#define CONFIGURATION__REG_ADDR 0x2U
+#define CHANNEL_SEL_REG_ADDR 0x3U
+#define RANGE_A1_REG_ADDR 0x4U
+#define RANGE_A2_REG_ADDR 0x5U
+#define RANGE_B1_REG_ADDR 0x6U
+#define RANGE_B2_REG_ADDR 0x7U
+#define STATUS_REG_ADDR 0x8U
+#define OVERRANGE_SET_A_REG_ADDR 0xAU
+#define OVERRANGE_SET_B_REG_ADDR 0xBU
+#define LPF_CONFIG_REG_ADDR 0xDU
+#define SEQ_STACK_BASE_REG_ADDR 0x20U
 #define SEQ_STACK_REG_ADDR(n) static_cast<uint8_t>(SEQ_STACK_BASE_REG + (n))  // until n = 31
 
-#define READBACK_MASK 0x7E00  // 0b011111110_0x00
+#define READBACK_MASK 0x7E00U  // 0b011111110_0x00
 
-// enum cfgProfile
-// {
-//     Default,
-//     SingleSample,
-//     SingleChannel,
-//     SweepManualCS,
-//     SweepBurstSEQEN,
-//     HighOSR
-// };
+enum cfgProfile
+{
+    Default,
+    SingleSample,
+    SingleChannel,
+    SweepManualCS,
+    SweepBurstSEQEN,
+    HighOSR
+};
 
 #endif  // ADS_REG_DEFAULTS_H
