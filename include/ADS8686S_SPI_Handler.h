@@ -20,7 +20,7 @@ class ADS8686S_SPI_Handler
     uint8_t CS, RST, BUSY, CONVST;
     // bool CRC(uint16_t* incomingData);
     // void reset(float resetDuration);
-
+    void configureSPI(void);
     SPIClass* vspi;
 
    public:

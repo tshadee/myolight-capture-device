@@ -13,39 +13,49 @@
 #define WIFI_CONNECTIONS 1         // number of connections to softAP
 
 // SPI
-#define SPI_FREQ 20000000  // 20 MHz for now. Upper limit is 50 MHz
+#define SPI_FREQ 24000000  // 24 MHz for now. Upper limit is 50 MHz
 
 /*
 
 [FL]
-D0  -   MUX SEL 2
-D1  -   MUX EN
-D2  -   MUX SEL 1
-D3  -   LM27762 EN
-D4  -   CONVST
-D5  -   BUSY
-D6  -   RST
+D0  -   MUX SEL 2   (sel2)
+D1  -   MUX EN      (sel1)
+D2  -   MUX SEL 1   (convst)
+D3  -   POWER EN    (busy)
+D4  -   CONVST      (rst)
+D5  -   BUSY        (cs)
+D6  -   RST         (x)
 
 [FR]
 5V  -   x
 GND -   UNIFIED GND
-3V3 -   TO LM27762
+3V3 -   TO ADC DIGITAL
 D10 -   MOSI
 D9  -   MISO
 D8  -   SCLK
-D7  -   CS
+D7  -   CS          (x)
 
 [BR]
-GPIO7
-GPIO6
+GPIO7 - x
+GPIO6 - x
 
 [BL]
-GPIO5 - 
+GPIO5 - x
 GPIO4 - (A4) Battery Voltage Measurement
 
 [BS]
 BATT+
 BATT-
+
+*/
+
+/*
+
+log_e (error)   (lowest)
+log_w (warning)
+log_i (info)
+log_d (debug)
+log_v (verbose) (highest)
 
 */
 

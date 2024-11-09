@@ -1,4 +1,7 @@
+
 #include "ADS8686S_SPI_Handler.h"
+
+// #include <driver/spi_master.h>
 
 ADS8686S_SPI_Handler::ADS8686S_SPI_Handler(uint8_t CS, uint8_t RST, uint8_t BUSY, uint8_t CONVST,
                                            SPIClass* spiInstance)
@@ -21,6 +24,12 @@ ADS8686S_SPI_Handler::ADS8686S_SPI_Handler(uint8_t CS, uint8_t RST, uint8_t BUSY
     digitalWrite(CS, HIGH);
     digitalWrite(RST, LOW);
     digitalWrite(CONVST, LOW);
+    delay(10);
+    configureSPI();
+};
+
+void ADS8686S_SPI_Handler::configureSPI(void) {
+
 };
 
 uint16_t ADS8686S_SPI_Handler::getConfigArr(int element) { return configArr[element]; };
@@ -49,7 +58,8 @@ uint16_t ADS8686S_SPI_Handler::readRegister(uint8_t REGADDR)
         uint16_t dataIn = vspi->transfer16(0x0000);
         digitalWrite(CS, HIGH);
         return dataIn;
-    } else 
+    }
+    else
     {
         return 0x0000;
     }
@@ -73,6 +83,7 @@ void ADS8686S_SPI_Handler::clearReceiveBuffer(void)
 // function
 void ADS8686S_SPI_Handler::configureADC(void)
 {
+    delay(500);  // 0.5s delay in case this is called right after power supply enable
     digitalWrite(RST, LOW);
     delayMicroseconds(100);  // FULL RESET. Hold RST low for 50 us
     digitalWrite(RST, HIGH);
@@ -102,12 +113,21 @@ void ADS8686S_SPI_Handler::configureADC(void)
             digitalWrite(CS, HIGH);
             if (receivedData != configArr[i - 1])
             {
-                Serial.print("Configuration mismatch at element: ");
-                Serial.println(i - 1);
-                Serial.print("Received Data: ");
-                Serial.println(receivedData, BIN);
-                Serial.print("Expected Data: ");
-                Serial.println(configArr[i - 1], BIN);
+                if (Serial.available())
+                {
+                    Serial.print("Configuration mismatch at element: ");
+                    Serial.println(i - 1);
+                    Serial.print("Received Data: ");
+                    Serial.println(receivedData, BIN);
+                    Serial.print("Expected Data: ");
+                    Serial.println(configArr[i - 1], BIN);
+                }
+                else
+                {
+                    log_w("Configuration mismatch at element: %d", i - 1);
+                    log_w("Received Data : %d", receivedData);
+                    log_w("Expected Data : %d", configArr[i - 1]);
+                }
                 break;
             };
         };

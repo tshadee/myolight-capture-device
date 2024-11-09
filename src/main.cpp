@@ -7,12 +7,12 @@
 #include "ADS8686S_SPI_Handler.h"
 #include "Battery.h"
 #include "COMMON_DEFS.h"
-#include "LM27762_Handler.h"
+#include "PowerSupply_Handler.h"
 
 const char* ssid = "ESP32C6T-WIFI";
 const char* password = "qw12er34";
 
-const unsigned long intervalMicros = (1000000.0 / WIFI_TRANSACTION_FREQ);
+const unsigned long intervalMicros = (1000000 / WIFI_TRANSACTION_FREQ);
 unsigned long previousMicros = 0;
 unsigned long counter = 0;
 
@@ -23,44 +23,61 @@ WiFiServer server(WIFI_PORT);  // port DOOM 666
 void setup()
 {
     pinMode(LED_BUILTIN, OUTPUT);
-    Serial.begin(115200);
+    esp_log_level_set("*", ESP_LOG_INFO);
 
-    // Power supply 1 initialisation
-    LM27762 AFE_PWR(D3);
-    AFE_PWR.enableIC();  // enable +-2V5 power supply for analogue front end
+    delay(6000);
+    if (Serial.available())
+    {
+        Serial.begin(115200);
+    };
 
-    // Power supply 2 initialisation
+    // Battery!
+    Battery lipo(GPIO_NUM_4);
+    float vbattf = lipo.readBatt();
+    if (vbattf < 3.7)
+    {
+        log_i("VBATT = %.3f", vbattf);  // This will NEVER be true. But if it is, :shrugg:
+    };
+
+    // Power supply init
+    PowerSupply PWR(D3);
+    PWR.enableIC();  // enable all power supplies (LM27762 and TPS61240)
+    log_i("Power ICs started");
 
     // SPI initialisation
-    SPIClass vspi(FSPI);
-    vspi.begin(D8, D9, D10, D7);
-    vspi.beginTransaction(SPISettings(
-        SPI_FREQ, MSBFIRST, SPI_MODE2)); /* CPOL = 1, CPHA = 0. TODO: SPI Frequency can be
-                                       increased to 50 MHz depending on load capacitance */
+    SPIClass hspi(HSPI);
+    hspi.begin(D8, D9, D10, D7);
+    hspi.beginTransaction(SPISettings(SPI_FREQ, MSBFIRST, SPI_MODE2));
+    log_i("HSPI Bus Started");
+    /* CPOL = 1, CPHA = 0.
+     * TODO: SPI Frequency can be increased to 50 MHz depending on load capacitance.
+     * FIXME: This holds the SPI bus and does not release it. In our case it doesn't
+     * matter as only one chip uses the SPI bus but if we had multi-SPI consider releasing the bus.
+     */
 
     // ADC initialisation
-    ADS8686S_SPI_Handler ADC(D7, D6, D5, D4, &vspi);
-    delayMicroseconds(1500);  // wait for power supply to stabilise and pulse RESET
+    ADS8686S_SPI_Handler ADC(D7, D6, D5, D4, &hspi);
     try
     {
         ADC.configureADC();
     }
     catch (...)
     {
-        log_v("ADS8686S Configuration Failed");  // error verbose
+        log_e("ADS8686S Configuration Failed");  // error verbose
     };
+
+    // hspi.endTransaction();
 
     // Wi-Fi initialisation
     if (!WiFi.softAP(WIFI_SSID, WIFI_PASSWORD, WIFI_CHANNEL, WIFI_SSID_HIDDEN, WIFI_CONNECTIONS,
                      false, WIFI_AUTH_WPA2_PSK))  // start access point
     {
-        log_v("Soft AP creation failed.");  // error verbose
+        log_e("Soft AP creation failed.");  // error verbose
     };
     IPAddress myIP = WiFi.softAPIP();  // set IP
     Serial.print("AP IP Address:");
     Serial.println(myIP);
     server.begin();  // start TCP server
-
     Serial.println("softAP config done.");
 };
 
