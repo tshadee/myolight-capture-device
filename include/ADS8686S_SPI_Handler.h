@@ -17,15 +17,15 @@ class ADS8686S_SPI_Handler
    private:
     uint16_t rxBuffer[rxBufferDepth];
     uint16_t configArr[cfgArrayDepth];
-    uint8_t RST, BUSY, CONVST;
-    gpio_num_t CS;
+    uint8_t BUSY;
+    gpio_num_t RST, CS, CONVST;
     // bool CRC(uint16_t* incomingData);
     // void reset(float resetDuration);
     void configureSPI(void);
     SPIClass* vspi;
 
    public:
-    ADS8686S_SPI_Handler(gpio_num_t CS, uint8_t RST, uint8_t BUSY, uint8_t CONVST,
+    ADS8686S_SPI_Handler(gpio_num_t CS, gpio_num_t RST, uint8_t BUSY, gpio_num_t CONVST,
                          SPIClass* spiInstance);
 
     uint16_t getReceiveBuffer(int element);

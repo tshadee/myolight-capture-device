@@ -7,7 +7,7 @@
 
 #define CONVST D4
 #define BUSY D5
-#define RST D6
+#define RST D6  // g16
 
 #define MOSI D10
 #define MISO D9
@@ -16,8 +16,6 @@
 
 SPIClass* vspi = NULL;
 ADS8686S_SPI_Handler* ADC = NULL;
-
-static const uint16_t SEQ_STACK_2_CHK = SEQ_STACK_1_DEFAULT_CFG & READBACK_MASK;
 
 void setup()
 {
@@ -41,7 +39,7 @@ void setup()
     esp_log_level_set("*", ESP_LOG_INFO);
 
     delay(5000);
-    while(!Serial.available()); //wait for the computer
+    while (!Serial.available());  // wait for the computer
     Serial.begin(115200);
 
     try
@@ -49,7 +47,7 @@ void setup()
         vspi = new SPIClass(FSPI);
         vspi->begin(SCLK, MISO, MOSI, -1);
 
-        ADC = new ADS8686S_SPI_Handler(GPIO_NUM_17, RST, BUSY, CONVST, vspi);
+        ADC = new ADS8686S_SPI_Handler(GPIO_NUM_17, GPIO_NUM_16, BUSY, GPIO_NUM_22, vspi);
         ADC->configureADC();
     }
     catch (...)
@@ -60,4 +58,11 @@ void setup()
 
 void loop() {
 
+    // delay(10000);
+    // ADC->initiateSample();
+    // uint16_t* dataReceived = ADC->getReceiveBuffer();
+    // for (int i = 0; i < 8; i++)
+    // {
+    //     Serial.println(dataReceived[i], BIN);
+    // };
 };

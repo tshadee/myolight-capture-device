@@ -3,8 +3,8 @@
 
 #include "driver/gpio.h"
 
-ADS8686S_SPI_Handler::ADS8686S_SPI_Handler(gpio_num_t CS, uint8_t RST, uint8_t BUSY, uint8_t CONVST,
-                                           SPIClass* spiInstance)
+ADS8686S_SPI_Handler::ADS8686S_SPI_Handler(gpio_num_t CS, gpio_num_t RST, uint8_t BUSY,
+                                           gpio_num_t CONVST, SPIClass* spiInstance)
     : CS(CS),
       RST(RST),
       CONVST(CONVST),
@@ -19,12 +19,12 @@ ADS8686S_SPI_Handler::ADS8686S_SPI_Handler(gpio_num_t CS, uint8_t RST, uint8_t B
     std::fill(std::begin(rxBuffer), std::end(rxBuffer), 0);
     // pinMode(CS, OUTPUT);
     gpio_set_direction(CS, GPIO_MODE_OUTPUT);
-    pinMode(RST, OUTPUT);
-    pinMode(CONVST, OUTPUT);
+    gpio_set_direction(CONVST, GPIO_MODE_OUTPUT);
+    gpio_set_direction(RST, GPIO_MODE_OUTPUT);
     pinMode(BUSY, INPUT);
-    digitalWrite(CS, HIGH);
-    digitalWrite(RST, LOW);
-    digitalWrite(CONVST, LOW);
+    gpio_set_level(CS, HIGH);
+    gpio_set_level(RST, LOW);
+    gpio_set_level(CONVST, LOW);
     delayMicroseconds(500);
 };
 
@@ -39,9 +39,9 @@ void ADS8686S_SPI_Handler::writeRegister(uint8_t REGADDR, uint8_t DATA)
     {
         uint16_t transferData = (0x8000 | (REGADDR << 9)) | DATA;
         vspi->beginTransaction(SPISettings(SPI_FREQ, MSBFIRST, SPI_MODE2));
-        digitalWrite(CS, LOW);
+        gpio_set_level(CS, LOW);
         vspi->transfer16(transferData);
-        digitalWrite(CS, HIGH);
+        gpio_set_level(CS, HIGH);
         vspi->endTransaction();
     };
 };
@@ -52,10 +52,10 @@ uint16_t ADS8686S_SPI_Handler::readRegister(uint8_t REGADDR)
     {
         uint16_t transferData = (REGADDR << 1) | 0x00;
         vspi->beginTransaction(SPISettings(SPI_FREQ, MSBFIRST, SPI_MODE2));
-        digitalWrite(CS, LOW);
+        gpio_set_level(CS, LOW);
         vspi->transfer16(transferData);
         uint16_t dataIn = vspi->transfer16(0x0000);
-        digitalWrite(CS, HIGH);
+        gpio_set_level(CS, HIGH);
         vspi->endTransaction();
         return dataIn;
     }
@@ -84,9 +84,9 @@ void ADS8686S_SPI_Handler::clearReceiveBuffer(void)
 void ADS8686S_SPI_Handler::configureADC(void)
 {
     delay(500);  // 0.5s delay in case this is called right after power supply enable
-    digitalWrite(RST, LOW);
+    gpio_set_level(RST, LOW);
     delay(50);  // FULL RESET. Hold RST low for 50 us (100 us safety margin)
-    digitalWrite(RST, HIGH);
+    gpio_set_level(RST, HIGH);
     delay(50);  // From FREST to CS falling is 240 us minimum (500 for safety). 15ms until first
                 // sample.
     if (!digitalRead(BUSY))
@@ -120,41 +120,58 @@ void ADS8686S_SPI_Handler::configureADC(void)
             uint16_t expectedReadback = (configArr[i - 1]) & READBACK_MASK_NO_ADDR;
             if (receivedData != expectedReadback)
             {
-                log_w("CFG Elem      : %d :mismatch", i - 1);
+                log_w("CFG Element   : %d :mismatch", i - 1);
                 log_w("Received Data : %s", String(receivedData, BIN).c_str());
                 log_w("Expected Data : %s", String(expectedReadback, BIN).c_str());
             }
             else
             {
-                log_i("CFG Elem      : %d :success", i - 1);
+                log_i("CFG Element   : %d :success", i - 1);
             };
+        };
+
+        vspi->beginTransaction(SPISettings(SPI_FREQ, MSBFIRST, SPI_MODE2));
+        gpio_set_level(CS, LOW);
+        uint16_t receivedData = (vspi->transfer16(0x0000)) & READBACK_MASK_NO_ADDR;
+        gpio_set_level(CS, HIGH);
+        vspi->endTransaction();
+        uint16_t expectedReadback = (configArr[cfgArrayDepth - 1] & READBACK_MASK_NO_ADDR);
+        if (receivedData != expectedReadback)
+        {
+            log_w("CFG Element   : %d :mismatch", cfgArrayDepth - 1);
+            log_w("Received Data : %s", String(receivedData, BIN).c_str());
+            log_w("Expected Data : %s", String(expectedReadback, BIN).c_str());
+        }
+        else
+        {
+            log_i("CFG Element   : %d :success", cfgArrayDepth - 1);
         };
     };
 
-    digitalWrite(CONVST, HIGH);  // pull CONVST high to initiate dummy conversion
+    gpio_set_level(CONVST, HIGH);  // pull CONVST high to initiate dummy conversion
     delayMicroseconds(1);
-    digitalWrite(CONVST, LOW);  // this toggle takes like 1 us total
-    while (digitalRead(BUSY));  // this is most likely already off
-    vspi->transfer16(0x0000);   // you could do a dummy read but this is to set the SEQEN
-                                // pointer to the top of the stack
+    gpio_set_level(CONVST, LOW);  // this toggle takes like 1 us total
+    while (digitalRead(BUSY));    // this is most likely already off
+    vspi->transfer16(0x0000);     // you could do a dummy read but this is to set the SEQEN
+                                  // pointer to the top of the stack
     clearReceiveBuffer();
     // ADC should be ready for use after this.
 };
 
 void ADS8686S_SPI_Handler::initiateSample(void)
 {
-    digitalWrite(CONVST, HIGH);
+    gpio_set_level(CONVST, HIGH);
     delayMicroseconds(1);
-    digitalWrite(CONVST, LOW);
+    gpio_set_level(CONVST, LOW);
     while (digitalRead(BUSY));  // TODO: BUSY to CS falling minimum 20 ns.
     vspi->beginTransaction(SPISettings(SPI_FREQ, MSBFIRST, SPI_MODE2));
-    digitalWrite(CS, LOW);
+    gpio_set_level(CS, LOW);
     for (int i = 0; i < rxBufferDepth; i++)
     {
         rxBuffer[i] = vspi->transfer16(
             0x0000);  // load all 8 samples (7 valid) into rxBuffer. Results from
                       // CHA and CHB are interlaced so check ADS_REG_DEFAULTS carefully
     }
-    digitalWrite(CS, HIGH);
+    gpio_set_level(CS, HIGH);
     vspi->endTransaction();
 };
