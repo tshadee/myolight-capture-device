@@ -6,8 +6,8 @@
 #include "driver/gpio.h"  // GPIO drive strength functions
 
 #define CONVST D4
-#define BUSY D5
-#define RST D6  // g16
+#define BUSY D5  // g23
+#define RST D6   // g16
 
 #define MOSI D10
 #define MISO D9
@@ -47,7 +47,7 @@ void setup()
         vspi = new SPIClass(FSPI);
         vspi->begin(SCLK, MISO, MOSI, -1);
 
-        ADC = new ADS8686S_SPI_Handler(GPIO_NUM_17, GPIO_NUM_16, BUSY, GPIO_NUM_22, vspi);
+        ADC = new ADS8686S_SPI_Handler(GPIO_NUM_17, GPIO_NUM_16, GPIO_NUM_23, GPIO_NUM_22, vspi);
         ADC->configureADC();
     }
     catch (...)
@@ -56,13 +56,17 @@ void setup()
     };
 };
 
-void loop() {
-
-    // delay(10000);
-    // ADC->initiateSample();
-    // uint16_t* dataReceived = ADC->getReceiveBuffer();
-    // for (int i = 0; i < 8; i++)
-    // {
-    //     Serial.println(dataReceived[i], BIN);
-    // };
+void loop()
+{
+    delay(10);
+    ADC->initiateSample();
+    uint16_t* dataReceived = ADC->getReceiveBuffer();
+    Serial.print("\r");  // Move cursor to the beginning of the line
+    for (int i = 0; i < 8; i++)
+    {
+        float output = ((int16_t)(dataReceived[i])) * 2.500f / 32768.000f;
+        Serial.print(output, 4);
+        if (i < 7) Serial.print(", ");  // Add commas between values
+    }
+    Serial.print("      ");  // Add spaces to clear leftover characters
 };

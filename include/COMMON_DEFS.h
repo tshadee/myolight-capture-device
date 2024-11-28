@@ -13,7 +13,7 @@
 #define WIFI_CONNECTIONS 1          // number of connections to softAP
 
 // SPI
-#define SPI_FREQ 75000  // 24 MHz for now. Upper limit is 50 MHz
+#define SPI_FREQ 150000  // 24 MHz for now. Upper limit is 50 MHz
 
 /*
 

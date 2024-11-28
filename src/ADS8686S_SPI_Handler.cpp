@@ -3,7 +3,7 @@
 
 #include "driver/gpio.h"
 
-ADS8686S_SPI_Handler::ADS8686S_SPI_Handler(gpio_num_t CS, gpio_num_t RST, uint8_t BUSY,
+ADS8686S_SPI_Handler::ADS8686S_SPI_Handler(gpio_num_t CS, gpio_num_t RST, gpio_num_t BUSY,
                                            gpio_num_t CONVST, SPIClass* spiInstance)
     : CS(CS),
       RST(RST),
@@ -21,7 +21,7 @@ ADS8686S_SPI_Handler::ADS8686S_SPI_Handler(gpio_num_t CS, gpio_num_t RST, uint8_
     gpio_set_direction(CS, GPIO_MODE_OUTPUT);
     gpio_set_direction(CONVST, GPIO_MODE_OUTPUT);
     gpio_set_direction(RST, GPIO_MODE_OUTPUT);
-    pinMode(BUSY, INPUT);
+    gpio_set_direction(BUSY, GPIO_MODE_INPUT);
     gpio_set_level(CS, HIGH);
     gpio_set_level(RST, LOW);
     gpio_set_level(CONVST, LOW);
@@ -35,7 +35,7 @@ uint16_t* ADS8686S_SPI_Handler::getReceiveBuffer(void) { return rxBuffer; };
 
 void ADS8686S_SPI_Handler::writeRegister(uint8_t REGADDR, uint8_t DATA)
 {
-    if (!digitalRead(BUSY))
+    if (!gpio_get_level(BUSY))
     {
         uint16_t transferData = (0x8000 | (REGADDR << 9)) | DATA;
         vspi->beginTransaction(SPISettings(SPI_FREQ, MSBFIRST, SPI_MODE2));
@@ -89,7 +89,7 @@ void ADS8686S_SPI_Handler::configureADC(void)
     gpio_set_level(RST, HIGH);
     delay(50);  // From FREST to CS falling is 240 us minimum (500 for safety). 15ms until first
                 // sample.
-    if (!digitalRead(BUSY))
+    if (!gpio_get_level(BUSY))
     {
         // writes to register (ADC output invalid)
         vspi->beginTransaction(SPISettings(SPI_FREQ, MSBFIRST, SPI_MODE2));
@@ -150,10 +150,10 @@ void ADS8686S_SPI_Handler::configureADC(void)
 
     gpio_set_level(CONVST, HIGH);  // pull CONVST high to initiate dummy conversion
     delayMicroseconds(1);
-    gpio_set_level(CONVST, LOW);  // this toggle takes like 1 us total
-    while (digitalRead(BUSY));    // this is most likely already off
-    vspi->transfer16(0x0000);     // you could do a dummy read but this is to set the SEQEN
-                                  // pointer to the top of the stack
+    gpio_set_level(CONVST, LOW);   // this toggle takes like 1 us total
+    while (gpio_get_level(BUSY));  // this is most likely already off
+    vspi->transfer16(0x0000);      // you could do a dummy read but this is to set the SEQEN
+                                   // pointer to the top of the stack
     clearReceiveBuffer();
     // ADC should be ready for use after this.
 };
@@ -163,7 +163,7 @@ void ADS8686S_SPI_Handler::initiateSample(void)
     gpio_set_level(CONVST, HIGH);
     delayMicroseconds(1);
     gpio_set_level(CONVST, LOW);
-    while (digitalRead(BUSY));  // TODO: BUSY to CS falling minimum 20 ns.
+    while (gpio_get_level(BUSY));  // TODO: BUSY to CS falling minimum 20 ns.
     vspi->beginTransaction(SPISettings(SPI_FREQ, MSBFIRST, SPI_MODE2));
     gpio_set_level(CS, LOW);
     for (int i = 0; i < rxBufferDepth; i++)
