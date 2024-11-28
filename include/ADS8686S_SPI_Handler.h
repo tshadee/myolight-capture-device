@@ -5,7 +5,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 
-#include "ADS_REG_DEFAULTS.h"
+#include "COMMON_DEFS.h"
 
 constexpr uint8_t cfgArrayDepth = 10;
 constexpr uint8_t rxBufferDepth = 8;
@@ -17,14 +17,15 @@ class ADS8686S_SPI_Handler
    private:
     uint16_t rxBuffer[rxBufferDepth];
     uint16_t configArr[cfgArrayDepth];
-    uint8_t CS, RST, BUSY, CONVST;
+    uint8_t RST, BUSY, CONVST;
+    gpio_num_t CS;
     // bool CRC(uint16_t* incomingData);
     // void reset(float resetDuration);
     void configureSPI(void);
     SPIClass* vspi;
 
    public:
-    ADS8686S_SPI_Handler(uint8_t CS, uint8_t RST, uint8_t BUSY, uint8_t CONVST,
+    ADS8686S_SPI_Handler(gpio_num_t CS, uint8_t RST, uint8_t BUSY, uint8_t CONVST,
                          SPIClass* spiInstance);
 
     uint16_t getReceiveBuffer(int element);
