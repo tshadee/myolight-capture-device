@@ -8,14 +8,14 @@
 #include "COMMON_DEFS.h"
 #include "driver/gpio.h"  // GPIO drive strength functions
 
-#define CONVST D4
-#define BUSY D5  // g23
-#define RST D6   // g16
+#define CONVST D4  // g22
+#define BUSY D5    // g23
+#define RST D6     // g16
 
-#define MOSI D10
-#define MISO D9
-#define SCLK D8
-#define CS D7
+#define MOSI D10  // g18
+#define MISO D9   // g20
+#define SCLK D8   // g19
+#define CS D7     // g17
 
 const unsigned long intervalMicros = (1000000 / WIFI_TRANSACTION_FREQ);
 unsigned long previousMicros = 0;
@@ -65,10 +65,10 @@ void setup()
         log_e("Soft AP creation failed.");
     };
     IPAddress myIP = WiFi.softAPIP();  // set IP
-    Serial.print("AP IP Address:");
+    server.begin();                    // start TCP server
+    log_i("SAP CFG GOOD");
+    Serial.print("AP IP ADDR: ");
     Serial.println(myIP);
-    server.begin();  // start TCP server
-    Serial.println("softAP config done.");
 };
 
 void loop()

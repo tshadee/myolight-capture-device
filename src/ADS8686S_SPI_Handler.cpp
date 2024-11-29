@@ -149,7 +149,6 @@ void ADS8686S_SPI_Handler::configureADC(void)
     };
 
     gpio_set_level(CONVST, HIGH);  // pull CONVST high to initiate dummy conversion
-    delayMicroseconds(1);
     gpio_set_level(CONVST, LOW);   // this toggle takes like 1 us total
     while (gpio_get_level(BUSY));  // this is most likely already off
     vspi->transfer16(0x0000);      // you could do a dummy read but this is to set the SEQEN
@@ -161,7 +160,6 @@ void ADS8686S_SPI_Handler::configureADC(void)
 void ADS8686S_SPI_Handler::initiateSample(void)
 {
     gpio_set_level(CONVST, HIGH);
-    delayMicroseconds(1);
     gpio_set_level(CONVST, LOW);
     while (gpio_get_level(BUSY));  // TODO: BUSY to CS falling minimum 20 ns.
     vspi->beginTransaction(SPISettings(SPI_FREQ, MSBFIRST, SPI_MODE2));
