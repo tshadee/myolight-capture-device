@@ -8,8 +8,8 @@
 #include "COMMON_DEFS.h"
 #include "driver/gpio.h"  // GPIO drive strength functions
 
-#define CONVST D4  // g22
-#define BUSY D5    // g23
+#define CONVST D5  // g23
+#define BUSY D4    // g22
 #define RST D6     // g16
 
 #define MOSI D10  // g18
@@ -54,7 +54,7 @@ void setup()
     // ADC Initialisation
     try
     {
-        ADC = new ADS8686S_SPI_Handler(GPIO_NUM_17, GPIO_NUM_16, GPIO_NUM_23, GPIO_NUM_22, vspi,
+        ADC = new ADS8686S_SPI_Handler(GPIO_NUM_17, GPIO_NUM_16, GPIO_NUM_22, GPIO_NUM_23, vspi,
                                        GPIO_NUM_0, GPIO_NUM_2, GPIO_NUM_1);
         ADC->configureADC();
     }
@@ -90,10 +90,9 @@ void loop()
                 previousMicros = currentMicros;
                 ADC->initiate4Sample();
                 ADC->setReceiveBuffer(32, numPacket);
-                uint16_t* dataReceived = ADC->getReceiveBuffer();
+                const uint16_t* dataReceived = ADC->getReceiveBuffer();
                 client.write((uint8_t*)dataReceived, 33 * sizeof(uint16_t));
                 numPacket++;
-                // Serial.printf("Packet no: %d \r", numPacket++);
             }
         }
         // close the connection:

@@ -174,22 +174,22 @@ void ADS8686S_SPI_Handler::initiate4Sample(void)
 {
     gpio_set_level(MXS2, LOW);  // channel 1 - AO = 0 ~ A1 = 0
     gpio_set_level(MXS1, LOW);
-    delayMicroseconds(20);
+    delayMicroseconds(15);
     collectSamples(0);
 
     gpio_set_level(MXS2, LOW);  // channel 2 - A1 = 0 ~ A0 = 1
     gpio_set_level(MXS1, HIGH);
-    delayMicroseconds(20);
+    delayMicroseconds(15);
     collectSamples(8);
 
     gpio_set_level(MXS2, HIGH);  // channel 3 - A1 = 1 ~ A0 = 0
     gpio_set_level(MXS1, LOW);
-    delayMicroseconds(20);
+    delayMicroseconds(15);
     collectSamples(16);
 
     gpio_set_level(MXS2, HIGH);  // channel 4 - A1 = 1 ~ A0 = 1
     gpio_set_level(MXS1, HIGH);
-    delayMicroseconds(20);
+    delayMicroseconds(15);
     collectSamples(24);
 };
 

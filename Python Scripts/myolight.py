@@ -15,89 +15,87 @@ class MYOLIGHTInterface(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("MYOLIGHT")
-        self.geometry("500x500")
+        self.geometry("250x500")
+        self.resizable(False, False)
 
-        # #backinggroundimage
-        # background_image = Image.open("background_image.png")
-        # ctk_background = ctk.CTkImage(dark_image = background_image,light_image=background_image,size=(600,600))
-        
-        # self.background_label = ctk.CTkLabel(self,image=ctk_background,text="")
-
-        # self.background_label.place(x=0,y=0,relwidth=1,relheight=1)
+        #frame for buttons
+        self.button_frame = ctk.CTkFrame(self,fg_color="transparent")
+        self.button_frame.pack(pady=10,padx=10,anchor="n")
 
         #BUTTONS AND SUCH
-        #logo
+        # ---- Logo ----
         self.label = ctk.CTkLabel(
-            self, 
-            text="MYOLIGHT v0.1", 
-            font=("Monaco", 16))
-        self.label.pack(pady=10,padx=5,anchor="n")
+            self.button_frame,  # Now inside button frame
+            text="MYOLIGHT v0.1",
+            font=("Monaco", 16)
+        )
+        self.label.pack(pady=5)
 
-        #connection establish
         self.connect_button = ctk.CTkButton(
-            self,
-            text="Search and Connect", 
-            font=("Monaco", 12), 
+            self.button_frame,
+            text="Search and Connect",
+            font=("Monaco", 12),
             command=self.start_connection,
             state="normal",
             corner_radius=0,
-            width=160)
-        self.connect_button.pack(pady=2,anchor="n")
+            width=160
+        )
+        self.connect_button.pack(pady=2)
 
-        #disconnect
         self.disconnect_button = ctk.CTkButton(
-            self,
-            text="Disconnect", 
-            font=("Monaco", 12), 
+            self.button_frame,
+            text="Disconnect",
+            font=("Monaco", 12),
             command=self.stop_connection,
             state="disabled",
             corner_radius=0,
-            width=160)
-        self.disconnect_button.pack(pady=2,anchor="n")
+            width=160
+        )
+        self.disconnect_button.pack(pady=2)
 
-        #data collection start
         self.start_button = ctk.CTkButton(
-            self, 
-            text="Start Data Collection", 
+            self.button_frame,
+            text="Start Data Collection",
             font=("Monaco", 12),
             command=self.start_data_collection,
             state="disabled",
             corner_radius=0,
-            width=160)
-        self.start_button.pack(pady=2,anchor="n")
+            width=160
+        )
+        self.start_button.pack(pady=2)
 
-        #data collection stop
         self.stop_button = ctk.CTkButton(
-            self, 
-            text="Stop Data Collection", 
+            self.button_frame,
+            text="Stop Data Collection",
             font=("Monaco", 12),
-            command=self.stop_data_collection, 
+            command=self.stop_data_collection,
             state="disabled",
             corner_radius=0,
-            width=160)
-        self.stop_button.pack(pady=2,anchor="n")
+            width=160
+        )
+        self.stop_button.pack(pady=2)
 
         #prune data
         self.prune_button = ctk.CTkButton(
-            self, 
+            self.button_frame, 
             text="Prune Data", 
             font=("Monaco", 12),
             command=self.start_pruning,
             state="normal",
             corner_radius=0,
             width=160)
-        self.prune_button.pack(pady=2,anchor="n")
+        self.prune_button.pack(pady=2)
 
         #analyse data
         self.analyse_button = ctk.CTkButton(
-            self, 
+            self.button_frame, 
             text="Analyse Data", 
             font=("Monaco", 12),
             command=self.start_analysis,
             state="normal",
             corner_radius=0,
             width=160)
-        self.analyse_button.pack(pady=2,anchor="n")
+        self.analyse_button.pack(pady=2)
 
         #status updater
         self.status_label = ctk.CTkLabel(
@@ -109,7 +107,7 @@ class MYOLIGHTInterface(ctk.CTk):
         #console window
         self.console_textbox = ctk.CTkTextbox(
             self,
-            width=490,
+            width=250,
             height=200,
             font=("Monaco", 12))
         self.console_textbox.pack(pady=10,expand=True,anchor="s")
@@ -222,6 +220,7 @@ class MYOLIGHTInterface(ctk.CTk):
             return f"Error: {e}"
 
     def stop_connection(self):
+        self.stop_data_collection()
         try:
             if self.socket_connection:
                 self.socket_connection.close()
@@ -344,7 +343,7 @@ def prune_data():
     fields = []
     channels = [[] for _ in range(32)]
     packet_numbers = []
-    diff_threshold = 5000
+    diff_threshold = 15000
 
     with open(CSV_FILE, mode='r', newline='') as file:
         csvreader = csv.reader(file)
@@ -380,7 +379,7 @@ def prune_data():
             ch2 = tuple(int(channels[j][i]) for j in range(8, 16))
             ch3 = tuple(int(channels[j][i]) for j in range(16, 24))
             ch4 = tuple(int(channels[j][i]) for j in range(24, 32))
-            if (ch1[6] == -21846) and (ch2[6] == -21846) and (ch3[6] == -21846) and (ch4[6] == -21846):
+            if (ch1[6] == -21846):
                 row = [ch1, ch2, ch3, ch4, packet_numbers[i]]
                 output_array.append(row)
             else:
@@ -452,7 +451,10 @@ def analyse_data():
 
     #zero pad limit
     num_samples = len(interpolated_channels[0])
-    target_length = 2 ** int(np.ceil(np.log2(num_samples)))
+    if (num_samples < 500):
+        target_length = 500
+    else:
+        target_length = num_samples
 
     #zero padding
     z_pad_channels = [np.pad(channel,(0,target_length-num_samples),'constant') for channel in interpolated_channels]
