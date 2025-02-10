@@ -6,9 +6,6 @@ from scipy.interpolate import interp1d
 from queue import Queue
 from PIL import Image
 
-os.environ['TCL_LIBRARY'] = r'C:\Users\pante\AppData\Local\Programs\Python\Python313\tcl\tcl8.6'
-os.environ['TK_LIBRARY'] = r'C:\Users\pante\AppData\Local\Programs\Python\Python313\tcl\tk8.6'
-
 #Set theme and colour options
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("green")  # Themes: "blue" (standard), "green", "dark-blue"
