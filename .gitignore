@@ -6,3 +6,4 @@
 .venv
 Python Scripts/data_log.csv
 Python Scripts/data_log_pruned.csv
+Python Scripts/ESP32C6T-softAP.xml
