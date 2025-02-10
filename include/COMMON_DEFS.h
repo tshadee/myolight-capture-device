@@ -5,7 +5,7 @@
 // Wi-Fi Configuration
 #define WIFI_SSID "ESP32C6T-softAP"
 #define WIFI_PASSWORD "qw12er34"
-#define WIFI_BUFFER_SIZE_BYTES 28  // Multiply these two
+#define WIFI_BUFFER_SIZE_BYTES 66  // Multiply these two
 #define WIFI_TRANSACTION_FREQ 500  // to get the data rate
 #define WIFI_PORT 666              // DOOM
 #define WIFI_CHANNEL 1             // supports ch 1 - 13
@@ -13,14 +13,14 @@
 #define WIFI_CONNECTIONS 1         // number of connections to softAP
 
 // SPI
-#define SPI_FREQ 500000  // 24 MHz for now. Upper limit is 50 MHz
+#define SPI_FREQ 2000000  // 2.4 MHz for now. Upper limit is 50 MHz
 
 /*
 
 [FL]
-D0  -   MUX SEL 2   (sel2)
+D0  -   MUX SEL 1   (sel2)
 D1  -   MUX EN      (sel1)
-D2  -   MUX SEL 1   (convst)
+D2  -   MUX SEL 2   (convst)
 D3  -   POWER EN    (busy)
 D4  -   CONVST      (rst)
 D5  -   BUSY        (cs)

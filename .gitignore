@@ -3,3 +3,6 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+.venv
+Python Scripts/data_log.csv
+Python Scripts/data_log_pruned.csv

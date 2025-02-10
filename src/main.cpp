@@ -17,6 +17,10 @@
 #define SCLK D8   // g19
 #define CS D7     // g17
 
+#define MXS1 D0
+#define MXS2 D2
+#define MXEN D1
+
 const unsigned long intervalMicros = (1000000 / WIFI_TRANSACTION_FREQ);
 unsigned long previousMicros = 0;
 unsigned long counter = 0;
@@ -32,9 +36,9 @@ void setup()
 {
     pinSetup();
     esp_log_level_set("*", ESP_LOG_INFO);
-    delay(5000);
+    delay(10000);
     while (!Serial.available());  // wait for the computer
-    Serial.begin(9600);
+    Serial.begin(115200);
 
     // FSPI Initialisation
     try
@@ -50,7 +54,8 @@ void setup()
     // ADC Initialisation
     try
     {
-        ADC = new ADS8686S_SPI_Handler(GPIO_NUM_17, GPIO_NUM_16, GPIO_NUM_23, GPIO_NUM_22, vspi);
+        ADC = new ADS8686S_SPI_Handler(GPIO_NUM_17, GPIO_NUM_16, GPIO_NUM_23, GPIO_NUM_22, vspi,
+                                       GPIO_NUM_0, GPIO_NUM_2, GPIO_NUM_1);
         ADC->configureADC();
     }
     catch (...)
@@ -83,15 +88,18 @@ void loop()
             if (currentMicros - previousMicros >= intervalMicros)
             {
                 previousMicros = currentMicros;
-                ADC->initiateSample();
+                ADC->initiate4Sample();
+                ADC->setReceiveBuffer(32, numPacket);
                 uint16_t* dataReceived = ADC->getReceiveBuffer();
-                client.write((uint8_t*)dataReceived, 8 * sizeof(uint16_t));
-                Serial.printf("Packet no: %d \r", numPacket++);
+                client.write((uint8_t*)dataReceived, 33 * sizeof(uint16_t));
+                numPacket++;
+                // Serial.printf("Packet no: %d \r", numPacket++);
             }
         }
         // close the connection:
         client.stop();
         Serial.println("\nClient Disconnected.");
+        numPacket = 0;
     }
 };
 
@@ -105,8 +113,14 @@ void pinSetup()
     pinMode(MISO, INPUT);
     pinMode(SCLK, OUTPUT);
     pinMode(CS, OUTPUT);
+    pinMode(MXS1, OUTPUT);
+    pinMode(MXS2, OUTPUT);
+    pinMode(MXEN, OUTPUT);
     digitalWrite(RST, LOW);
     digitalWrite(CONVST, LOW);
+    digitalWrite(MXS1, LOW);
+    digitalWrite(MXS2, LOW);
+    digitalWrite(MXEN, LOW);  // MUX off until necessary
     gpio_set_drive_capability(GPIO_NUM_19,
                               GPIO_DRIVE_CAP_3);  // set SCLK drive to max
     gpio_set_drive_capability(GPIO_NUM_18,

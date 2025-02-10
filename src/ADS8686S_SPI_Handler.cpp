@@ -4,12 +4,16 @@
 #include "driver/gpio.h"
 
 ADS8686S_SPI_Handler::ADS8686S_SPI_Handler(gpio_num_t CS, gpio_num_t RST, gpio_num_t BUSY,
-                                           gpio_num_t CONVST, SPIClass* spiInstance)
+                                           gpio_num_t CONVST, SPIClass* spiInstance,
+                                           gpio_num_t MXS1, gpio_num_t MXS2, gpio_num_t MXEN)
     : CS(CS),
       RST(RST),
       CONVST(CONVST),
       BUSY(BUSY),
       vspi(spiInstance),
+      MXS1(MXS1),
+      MXS2(MXS2),
+      MXEN(MXEN),
       configArr{CONFIG_DEFAULT_CFG,      RANGE_A1_DEFAULT_CFG,    RANGE_A2_DEFAULT_CFG,
                 RANGE_B1_DEFAULT_CFG,    RANGE_B2_DEFAULT_CFG,    LPF_DEFAULT_CFG,
                 SEQ_STACK_0_DEFAULT_CFG, SEQ_STACK_1_DEFAULT_CFG, SEQ_STACK_2_DEFAULT_CFG,
@@ -17,14 +21,19 @@ ADS8686S_SPI_Handler::ADS8686S_SPI_Handler(gpio_num_t CS, gpio_num_t RST, gpio_n
 
 {
     std::fill(std::begin(rxBuffer), std::end(rxBuffer), 0);
-    // pinMode(CS, OUTPUT);
     gpio_set_direction(CS, GPIO_MODE_OUTPUT);
     gpio_set_direction(CONVST, GPIO_MODE_OUTPUT);
     gpio_set_direction(RST, GPIO_MODE_OUTPUT);
     gpio_set_direction(BUSY, GPIO_MODE_INPUT);
+    gpio_set_direction(MXS1, GPIO_MODE_OUTPUT);
+    gpio_set_direction(MXS2, GPIO_MODE_OUTPUT);
+    gpio_set_direction(MXEN, GPIO_MODE_OUTPUT);
     gpio_set_level(CS, HIGH);
     gpio_set_level(RST, LOW);
     gpio_set_level(CONVST, LOW);
+    gpio_set_level(MXS1, LOW);
+    gpio_set_level(MXS2, LOW);
+    gpio_set_level(MXEN, HIGH);
     delayMicroseconds(500);
 };
 
@@ -78,6 +87,10 @@ void ADS8686S_SPI_Handler::clearReceiveBuffer(void)
     std::fill(std::begin(rxBuffer), std::end(rxBuffer), 0);
 };
 
+void ADS8686S_SPI_Handler::setReceiveBuffer(int element, uint16_t value)
+{
+    rxBuffer[element] = value;
+}
 // Call this function ONCE upon startup. ADC will undergo full reset and load in the
 // configration profile. Make sure to set the cfgProfile in setConfigArr() before calling this
 // function. Mode 2 SPI on FSPI line.
@@ -157,19 +170,75 @@ void ADS8686S_SPI_Handler::configureADC(void)
     // ADC should be ready for use after this.
 };
 
-void ADS8686S_SPI_Handler::initiateSample(void)
+void ADS8686S_SPI_Handler::initiate4Sample(void)
+{
+    gpio_set_level(MXS2, LOW);  // channel 1 - AO = 0 ~ A1 = 0
+    gpio_set_level(MXS1, LOW);
+    delayMicroseconds(20);
+    collectSamples(0);
+
+    gpio_set_level(MXS2, LOW);  // channel 2 - A1 = 0 ~ A0 = 1
+    gpio_set_level(MXS1, HIGH);
+    delayMicroseconds(20);
+    collectSamples(8);
+
+    gpio_set_level(MXS2, HIGH);  // channel 3 - A1 = 1 ~ A0 = 0
+    gpio_set_level(MXS1, LOW);
+    delayMicroseconds(20);
+    collectSamples(16);
+
+    gpio_set_level(MXS2, HIGH);  // channel 4 - A1 = 1 ~ A0 = 1
+    gpio_set_level(MXS1, HIGH);
+    delayMicroseconds(20);
+    collectSamples(24);
+};
+
+void ADS8686S_SPI_Handler::initiateSingleSample(int MXCH)
+{
+    switch (MXCH)
+    {
+        case (1):
+            gpio_set_level(MXS2, LOW);
+            gpio_set_level(MXS1, LOW);
+            break;
+        case (2):
+            gpio_set_level(MXS2, LOW);
+            gpio_set_level(MXS1, HIGH);
+            break;
+        case (3):
+            gpio_set_level(MXS2, HIGH);
+            gpio_set_level(MXS1, LOW);
+            break;
+        case (4):
+            gpio_set_level(MXS2, HIGH);
+            gpio_set_level(MXS1, HIGH);
+            break;
+        default:  // default to CH1
+            gpio_set_level(MXS1, LOW);
+            gpio_set_level(MXS2, LOW);
+            break;
+    }
+    delayMicroseconds(15);  // TODO: check settling time
+    collectSamples(0);
+};
+
+void ADS8686S_SPI_Handler::collectSamples(int startIndex)
 {
     gpio_set_level(CONVST, HIGH);
     gpio_set_level(CONVST, LOW);
     while (gpio_get_level(BUSY));  // TODO: BUSY to CS falling minimum 20 ns.
     vspi->beginTransaction(SPISettings(SPI_FREQ, MSBFIRST, SPI_MODE2));
     gpio_set_level(CS, LOW);
-    for (int i = 0; i < rxBufferDepth; i++)
-    {
-        rxBuffer[i] = vspi->transfer16(
-            0x0000);  // load all 8 samples (7 valid) into rxBuffer. Results from
-                      // CHA and CHB are interlaced so check ADS_REG_DEFAULTS carefully
-    }
+
+    rxBuffer[startIndex] = vspi->transfer16(0x0000);
+    rxBuffer[startIndex + 1] = vspi->transfer16(0x0000);
+    rxBuffer[startIndex + 2] = vspi->transfer16(0x0000);
+    rxBuffer[startIndex + 3] = vspi->transfer16(0x0000);
+    rxBuffer[startIndex + 4] = vspi->transfer16(0x0000);
+    rxBuffer[startIndex + 5] = vspi->transfer16(0x0000);
+    rxBuffer[startIndex + 6] = vspi->transfer16(0x0000);
+    rxBuffer[startIndex + 7] = vspi->transfer16(0x0000);
+
     gpio_set_level(CS, HIGH);
     vspi->endTransaction();
 };
