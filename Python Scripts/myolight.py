@@ -220,8 +220,9 @@ class MYOLIGHTInterface(ctk.CTk):
             return f"Error: {e}"
 
     def stop_connection(self):
-        self.stop_data_collection()
         try:
+            if self.collection_thread and self.collection_thread.is_alive():
+                self.stop_data_collection()
             if self.socket_connection:
                 self.socket_connection.close()
                 self.socket_connection = None
@@ -248,19 +249,20 @@ class MYOLIGHTInterface(ctk.CTk):
         self.after(100, self.process_status_queue)
 
     def start_data_collection(self):
+        self.send_command("START")
         self.status_queue.put("Status: Collecting Data...")
         self.start_button.configure(state="disabled")
         self.stop_button.configure(state="normal")
+        self.prune_button.configure(state="disabled")
+        self.analyse_button.configure(state="disabled")
         self.stop_event.clear()
-
         self.collection_thread = threading.Thread(target=self.collect_data, daemon=True)
         self.collection_thread.start()
 
     def stop_data_collection(self):
+        self.send_command("STOP")
         self.status_queue.put("Status: Stopping...")
         self.stop_event.set()
-        # if self.collection_thread and self.collection_thread.is_alive():
-        #     self.collection_thread.join()  # Wait for the thread to finish
         self.after(100, self.check_collection_thread)
         self.connect_button.configure(state="disabled")
         self.disconnect_button.configure(state="normal")
@@ -294,6 +296,15 @@ class MYOLIGHTInterface(ctk.CTk):
         self.status_queue.put("Status: Analysing Data...")
         analyse_data()
         self.status_queue.put("Status: Analysis Complete")
+
+    def send_command(self, command: str):
+        if self.socket_connection:
+            try:
+                message = command.strip() + "\n"
+                self.socket_connection.sendall(message.encode('utf-8'))
+                print(f"Sent command: {command}")
+            except Exception as e:
+                print(f"Error sending command: {e}")
 
     def collect_data(self):
         BUFFER_SIZE = 66
@@ -412,6 +423,8 @@ def analyse_data():
     with open(CSV_FILE, mode='r',newline='') as file:
         csvreader = csv.reader(file)
         next(csvreader)
+        # Define the new index positions
+        index_map = [1, 3, 5, 7, 0, 2, 4, 6]
 
         for row in csvreader:
             ch1_str, ch2_str, ch3_str, ch4_str, pn_str = row 
@@ -420,10 +433,14 @@ def analyse_data():
             ch2 = list(ast.literal_eval(ch2_str))
             ch3 = list(ast.literal_eval(ch3_str))
             ch4 = list(ast.literal_eval(ch4_str))
-            ch1.pop(6)
-            ch2.pop(6)
-            ch3.pop(6)
-            ch4.pop(6)
+            ch1[:8] = [ch1[i] for i in index_map]
+            ch2[:8] = [ch2[i] for i in index_map]
+            ch3[:8] = [ch3[i] for i in index_map]
+            ch4[:8] = [ch4[i] for i in index_map]
+            ch1.pop(7)
+            ch2.pop(7)
+            ch3.pop(7)
+            ch4.pop(7)
             full_row = ch1+ch2+ch3+ch4
             channels.append(full_row)
 
