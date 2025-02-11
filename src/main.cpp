@@ -7,6 +7,7 @@
 #include "ADS8686S_SPI_Handler.h"
 #include "COMMON_DEFS.h"
 #include "driver/gpio.h"  // GPIO drive strength functions
+#include "driver/timer.h"
 
 #define CONVST D5  // g23
 #define BUSY D4    // g22
@@ -21,16 +22,49 @@
 #define MXS2 D2
 #define MXEN D1
 
-const unsigned long intervalMicros = (1000000 / WIFI_TRANSACTION_FREQ);
-unsigned long previousMicros = 0;
-unsigned long counter = 0;
+// Timer parameters
+#define TIMER_DIVIDER 80  // Divides 80MHz clock to 1MHz (1us tick)
+#define TIMER_SCALE (80000000 / TIMER_DIVIDER)
+#define TIMER_INTERVAL_US (1000000 / WIFI_TRANSACTION_FREQ)  // in microseconds
+
+enum SysState
+{
+    IDLE,
+    SENDING_DATA,
+    CONFIGURING
+};
+
+// Global Variables
+volatile bool sampleReady = false;  // Flag set by the ISR
+WiFiServer server(WIFI_PORT);       // port DOOM 666
+SPIClass* vspi = NULL;
+ADS8686S_SPI_Handler* ADC = NULL;
+SysState currentState = IDLE;
+SysState previousState = IDLE;
+hw_timer_t* timer = NULL;  // Timer handler
 unsigned long numPacket = 0;
-WiFiServer server(WIFI_PORT);  // port DOOM 666
 
 void pinSetup();
 
-SPIClass* vspi = NULL;
-ADS8686S_SPI_Handler* ADC = NULL;
+void IRAM_ATTR onTimer() { sampleReady = true; };
+
+void setupTimer()
+{
+    // Initialize the hardware timer
+    timer = timerBegin(TIMER_SCALE);  // timer 0, count up
+    timerAttachInterrupt(timer, &onTimer);
+    timerAlarm(timer, TIMER_INTERVAL_US, true, 0);  // auto-reload true
+}
+
+void stopTimer()
+{
+    if (timer != NULL)
+    {
+        timerDetachInterrupt(timer);
+        timerEnd(timer);
+        timer = NULL;
+    }
+}
 
 void setup()
 {
@@ -84,16 +118,66 @@ void loop()
         Serial.println("New Client.");  // print a message out the serial port
         while (client.connected())
         {  // loop while the client's connected
-            unsigned long currentMicros = micros();
-            if (currentMicros - previousMicros >= intervalMicros)
+            if (client.available())
             {
-                previousMicros = currentMicros;
-                ADC->initiate4Sample();
-                ADC->setReceiveBuffer(32, numPacket);
-                const uint16_t* dataReceived = ADC->getReceiveBuffer();
-                client.write((uint8_t*)dataReceived, 33 * sizeof(uint16_t));
-                numPacket++;
+                String command = client.readStringUntil('\n');
+                command.trim();
+                // good ol statemachine
+                if (command == "START")
+                {
+                    log_i("START GOT");
+                    switch (previousState)
+                    {
+                        case SENDING_DATA:
+                            currentState = SENDING_DATA;
+                            break;
+                        case IDLE:
+                            currentState = SENDING_DATA;
+                            setupTimer();
+                            break;
+                        case CONFIGURING:
+                            currentState = IDLE;
+                            break;
+                    }
+                }
+                else if (command == "STOP")
+                {
+                    log_i("STOP GOT");
+                    currentState = IDLE;
+                    stopTimer();
+                }
+                else if (command == "CONFIG")
+                {
+                    log_i("CONFIG GOT");
+                    currentState = CONFIGURING;
+                }
+                else
+                {
+                    currentState == IDLE;
+                };
+            };
+
+            switch (currentState)
+            {
+                case IDLE:
+                    numPacket = 0;
+                    break;
+                case SENDING_DATA:
+                    if (sampleReady)  // polling managed by ISR
+                    {
+                        sampleReady = false;
+                        ADC->initiate4Sample();
+                        ADC->setReceiveBuffer(32, numPacket);
+                        const uint16_t* dataReceived = ADC->getReceiveBuffer();
+                        client.write((uint8_t*)dataReceived, 33 * sizeof(uint16_t));
+                        numPacket++;
+                    }
+                    break;
+                case CONFIGURING:
+
+                    break;
             }
+            previousState = currentState;
         }
         // close the connection:
         client.stop();
