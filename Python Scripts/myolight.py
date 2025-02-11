@@ -6,6 +6,8 @@ from scipy.interpolate import interp1d
 from queue import Queue
 from PIL import Image
 
+#TODO: statemachine and configuration
+
 #Set theme and colour options
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("green")  # Themes: "blue" (standard), "green", "dark-blue"
@@ -354,7 +356,7 @@ def prune_data():
     fields = []
     channels = [[] for _ in range(32)]
     packet_numbers = []
-    diff_threshold = 15000
+    diff_threshold = 30000
 
     with open(CSV_FILE, mode='r', newline='') as file:
         csvreader = csv.reader(file)
@@ -413,7 +415,7 @@ def prune_data():
 def analyse_data():
     #TODO: change this into something user can input
     CSV_FILE = "data_log_pruned.csv"
-    VREF = 2.50 #change this to userinput
+    VREF = 5.00 #change this to userinput
     sample_rate = 500 #hz
     time_step = 1/sample_rate
 
@@ -449,7 +451,7 @@ def analyse_data():
 
     print(f"[INFO] Loaded data shape: {channels.shape}")  # should be (N, 32)
 
-    channels *= (VREF/32768.0) #normalisation and scaling to VREF
+    channels *= (VREF/2**15) #normalisation and scaling to VREF
 
     min_packet = np.min(packet_numbers)
     max_packet = np.max(packet_numbers)
@@ -459,7 +461,7 @@ def analyse_data():
     interpolated_channels = []
     for channel in channels.T:
         seconds_time_axis = packet_numbers*time_step
-        interpolation_func = interp1d(seconds_time_axis,channel,kind="linear",fill_value="extrapolate")
+        interpolation_func = interp1d(seconds_time_axis,channel,kind="linear",fill_value="linear")
         interpolated_channel = interpolation_func(full_time_axis)
         interpolated_channels.append(interpolated_channel)
     
@@ -477,9 +479,11 @@ def analyse_data():
     z_pad_channels = [np.pad(channel,(0,target_length-num_samples),'constant') for channel in interpolated_channels]
 
     #fft compute
-    fft_results = [np.fft.fft(channel)/target_length for channel in z_pad_channels]
+    fft_results = [np.fft.fft(channel)/float(target_length)for channel in z_pad_channels]
     frequency_axis = np.fft.fftfreq(target_length, d=time_step)[:target_length//2]
-    fft_truncated = [np.abs(fft_result[:target_length//2]) for fft_result in fft_results]
+    fft_truncated = [2*np.abs(fft_result[:target_length//2]) for fft_result in fft_results]
+    for fft in fft_truncated:
+        fft[0] /= 2
 
     #plt
     fig, axes = plt.subplots(4, 7, figsize=(22, 11))  # 4 rows, 8 columns
