@@ -12,23 +12,26 @@ from PIL import Image
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("green")  # Themes: "blue" (standard), "green", "dark-blue"
 
+configuration_arr = [0,0,0]
+# sample rate , range , operation mode 
+
 # --- GUI App Class ---
 class MYOLIGHTInterface(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("MYOLIGHT")
-        self.geometry("250x500")
+        self.geometry("400x500")
         self.resizable(False, False)
 
         #frame for buttons
         self.button_frame = ctk.CTkFrame(self,fg_color="transparent")
-        self.button_frame.pack(pady=10,padx=10,anchor="n")
+        self.button_frame.grid(row=0,column=0,sticky="nw")
 
         #BUTTONS AND SUCH
         # ---- Logo ----
         self.label = ctk.CTkLabel(
             self.button_frame,  # Now inside button frame
-            text="MYOLIGHT v0.1",
+            text="MYOLIGHT v0.2",
             font=("Monaco", 16)
         )
         self.label.pack(pady=5)
@@ -99,20 +102,77 @@ class MYOLIGHTInterface(ctk.CTk):
             width=160)
         self.analyse_button.pack(pady=2)
 
+        self.control_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.control_frame.grid(row=0,column=1,sticky="ne")
+
+        self.sample_label = ctk.CTkLabel(
+            self.control_frame,
+            text="Sample Rate (Hz)", 
+            font=("Monaco", 12)
+        )
+        self.sample_label.pack(pady=5)
+
+        self.sample_combo = ctk.CTkComboBox(
+            self.control_frame,
+            values=["200","500","1000","2000"],
+            command=lambda choice: self.update_config(0,choice)
+        )
+        self.sample_combo.pack(pady=2)
+
+        self.range_label = ctk.CTkLabel(
+            self.control_frame,
+            text="Range (+-V)", 
+            font=("Monaco", 12)
+        )
+        self.range_label.pack(pady=2)
+
+        self.range_combo = ctk.CTkComboBox(
+            self.control_frame,
+            values=["2.5","5","10","12.5 (OVP)"],
+            command=lambda choice: self.update_config(1,choice)
+        )
+        self.range_combo.pack(pady=2)
+
+        self.opmode_label = ctk.CTkLabel(
+            self.control_frame,
+            text="Operation Mode", 
+            font=("Monaco", 12)
+        )
+        self.opmode_label.pack(pady=2)
+
+        self.opmode_combo = ctk.CTkComboBox(
+            self.control_frame,
+            values=["Default","Single Row (1)","Single Row (2)","Single Row (3)","Single Row (4)"],
+            command=lambda choice: self.update_config(2,choice)
+        )
+        self.opmode_combo.pack(pady=2)
+
+        self.config_button = ctk.CTkButton(
+            self.control_frame,
+            text="Send Config",
+            font=("Monaco", 12),
+            corner_radius=0,
+            width=160,
+            command=self.send_config,
+            state="disabled"
+        )
+        self.config_button.pack(pady=2)
+
+
         #status updater
         self.status_label = ctk.CTkLabel(
             self, 
             text="Status: Idle", 
             font=("Monaco", 12))
-        self.status_label.pack(pady=10)
+        self.status_label.grid(row=1,column=0,columnspan=2)
 
         #console window
         self.console_textbox = ctk.CTkTextbox(
             self,
-            width=250,
+            width=400,
             height=200,
             font=("Monaco", 12))
-        self.console_textbox.pack(pady=10,expand=True,anchor="s")
+        self.console_textbox.grid(row=2,column=0,columnspan=2,sticky="s")
         self.console_textbox.configure(state="disabled") #yall dont interact with this textbox
 
         #sysout to this ctk window instead of console
@@ -167,6 +227,7 @@ class MYOLIGHTInterface(ctk.CTk):
             self.stop_button.configure(state="normal")
             self.prune_button.configure(state="disabled")
             self.analyse_button.configure(state="disabled")
+            self.config_button.configure(state="normal")
         except Exception as e:
             self.status_queue.put(f"Error: {e}")
         # else:
@@ -237,6 +298,7 @@ class MYOLIGHTInterface(ctk.CTk):
                 self.stop_button.configure(state="disabled")
                 self.prune_button.configure(state="normal")
                 self.analyse_button.configure(state="normal")
+                self.config_button.configure(state="disabled")
         except Exception as e:
             self.status_queue.put(f"Error: {e}")
             print(f"Error: {e}")
@@ -257,6 +319,7 @@ class MYOLIGHTInterface(ctk.CTk):
         self.stop_button.configure(state="normal")
         self.prune_button.configure(state="disabled")
         self.analyse_button.configure(state="disabled")
+        self.config_button.configure(state="disabled")
         self.stop_event.clear()
         self.collection_thread = threading.Thread(target=self.collect_data, daemon=True)
         self.collection_thread.start()
@@ -272,6 +335,7 @@ class MYOLIGHTInterface(ctk.CTk):
         self.stop_button.configure(state="disabled")
         self.prune_button.configure(state="normal")
         self.analyse_button.configure(state="normal")
+        self.config_button.configure(state="normal")
         
     def destroy(self):
         self.stop_data_collection()
@@ -307,6 +371,26 @@ class MYOLIGHTInterface(ctk.CTk):
                 print(f"Sent command: {command}")
             except Exception as e:
                 print(f"Error sending command: {e}")
+
+    def send_config(self):
+        if self.socket_connection:
+            try:
+                message=",".join(map(str, configuration_arr)) + "\n"
+                self.socket_connection.sendall(message.encode('utf-8'))
+                print(f"Sent config: {message}")
+            except Exception as e:
+                print(f"Error sending config: {e}")
+
+    def update_config(self,index,choice):
+        mapping = [
+        {"200": 0, "500": 1, "1000": 2, "2000": 3},  # Sample rate
+        {"2.5": 0, "5": 1, "10": 2, "12.5 (OVP)": 3},  # Range
+        {"Default": 0, "Single Row (1)": 1, "Single Row (2)": 2, "Single Row (3)": 3, "Single Row (4)": 4}  # Op Mode
+        ]
+
+        if choice in mapping[index]:
+            configuration_arr[index] = mapping[index][choice]
+            print(f"Updated config[{index}] -> {configuration_arr[index]}")
 
     def collect_data(self):
         BUFFER_SIZE = 66
@@ -487,7 +571,7 @@ def analyse_data():
 
     #plt
     fig, axes = plt.subplots(4, 7, figsize=(22, 11))  # 4 rows, 8 columns
-    fig.suptitle("FFT of All 28 Channels", fontsize=12)
+    fig.suptitle("FFT of All 28 Channels", fontsize=10)
     
     for i, fft_result in enumerate(fft_truncated):
         row = (27-i) // 7  # ch1-8 at the bottom instead of top
