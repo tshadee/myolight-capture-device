@@ -82,6 +82,8 @@ void ADS8686S_SPI_Handler::setConfigArr(uint16_t* data)
     };
 };
 
+void ADS8686S_SPI_Handler::setConfigElem(uint16_t data, int element) {}
+
 void ADS8686S_SPI_Handler::clearReceiveBuffer(void)
 {
     std::fill(std::begin(rxBuffer), std::end(rxBuffer), 0);

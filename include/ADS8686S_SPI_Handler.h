@@ -37,6 +37,7 @@ class ADS8686S_SPI_Handler
     void setReceiveBuffer(int element, uint16_t value);
 
     void setConfigArr(uint16_t* data);
+    void setConfigElem(uint16_t data, int element);
     void clearReceiveBuffer(void);
 
     void writeRegister(uint8_t REGADDR, uint8_t DATA);

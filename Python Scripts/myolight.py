@@ -12,6 +12,8 @@ from PIL import Image
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("green")  # Themes: "blue" (standard), "green", "dark-blue"
 
+sample_rate = 0
+sample_range = 0
 configuration_arr = [0,0,0]
 # sample rate , range , operation mode 
 
@@ -115,7 +117,9 @@ class MYOLIGHTInterface(ctk.CTk):
         self.sample_combo = ctk.CTkComboBox(
             self.control_frame,
             values=["200","500","1000","2000"],
-            command=lambda choice: self.update_config(0,choice)
+            command=lambda choice: self.update_config(0,choice),
+            font=("Monaco", 12),  
+            dropdown_font=("Monaco", 12)  
         )
         self.sample_combo.pack(pady=2)
 
@@ -129,7 +133,9 @@ class MYOLIGHTInterface(ctk.CTk):
         self.range_combo = ctk.CTkComboBox(
             self.control_frame,
             values=["2.5","5","10","12.5 (OVP)"],
-            command=lambda choice: self.update_config(1,choice)
+            command=lambda choice: self.update_config(1,choice),
+            font=("Monaco", 12),  
+            dropdown_font=("Monaco", 12)  
         )
         self.range_combo.pack(pady=2)
 
@@ -143,7 +149,9 @@ class MYOLIGHTInterface(ctk.CTk):
         self.opmode_combo = ctk.CTkComboBox(
             self.control_frame,
             values=["Default","Single Row (1)","Single Row (2)","Single Row (3)","Single Row (4)"],
-            command=lambda choice: self.update_config(2,choice)
+            command=lambda choice: self.update_config(2,choice),
+            font=("Monaco", 12),  
+            dropdown_font=("Monaco", 12)  
         )
         self.opmode_combo.pack(pady=2)
 
@@ -338,6 +346,7 @@ class MYOLIGHTInterface(ctk.CTk):
         self.config_button.configure(state="normal")
         
     def destroy(self):
+        plt.close('all')
         self.stop_data_collection()
         self.stop_connection()
         super().destroy()
