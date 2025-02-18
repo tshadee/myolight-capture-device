@@ -132,7 +132,7 @@ class MYOLIGHTInterface(ctk.CTk):
 
         self.range_combo = ctk.CTkComboBox(
             self.control_frame,
-            values=["2.5","5","10","12.5 (OVP)"],
+            values=["2.5","5","10"],
             command=lambda choice: self.update_config(1,choice),
             font=("Monaco", 12),  
             dropdown_font=("Monaco", 12)  
@@ -393,7 +393,7 @@ class MYOLIGHTInterface(ctk.CTk):
     def update_config(self,index,choice):
         mapping = [
         {"200": 0, "500": 1, "1000": 2, "2000": 3},  # Sample rate
-        {"2.5": 0, "5": 1, "10": 2, "12.5 (OVP)": 3},  # Range
+        {"2.5": 0, "5": 1, "10": 2},  # Range
         {"Default": 0, "Single Row (1)": 1, "Single Row (2)": 2, "Single Row (3)": 3, "Single Row (4)": 4}  # Op Mode
         ]
 

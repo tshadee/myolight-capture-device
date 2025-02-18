@@ -34,6 +34,13 @@ enum SysState
     CONFIGURING
 };
 
+struct Config
+{
+    int sample_rate;
+    int adc_range;
+    int operation_mode;
+};
+
 // Global Variables
 volatile bool sampleReady = false;  // Flag set by the ISR
 WiFiServer server(WIFI_PORT);       // port DOOM 666
@@ -43,28 +50,16 @@ SysState currentState = IDLE;
 SysState previousState = IDLE;
 hw_timer_t* timer = NULL;  // Timer handler
 unsigned long numPacket = 0;
+int timer_interval_us = 1000000 / 500;
 
 void pinSetup();
+void configUpdater(String configData, ADS8686S_SPI_Handler* ADC);
+void setupTimer();
+void stopTimer();
+void defaultOperation();
+void singleColumn(int col);
 
 void IRAM_ATTR onTimer() { sampleReady = true; };
-
-void setupTimer()
-{
-    // Initialize the hardware timer
-    timer = timerBegin(TIMER_SCALE);  // timer 0, count up
-    timerAttachInterrupt(timer, &onTimer);
-    timerAlarm(timer, TIMER_INTERVAL_US, true, 0);  // auto-reload true
-}
-
-void stopTimer()
-{
-    if (timer != NULL)
-    {
-        timerDetachInterrupt(timer);
-        timerEnd(timer);
-        timer = NULL;
-    }
-}
 
 void setup()
 {
@@ -150,10 +145,6 @@ void loop()
                 {
                     log_i("CONFIG GOT");
                     currentState = CONFIGURING;
-                }
-                else
-                {
-                    currentState == IDLE;
                 };
             };
 
@@ -174,7 +165,13 @@ void loop()
                     }
                     break;
                 case CONFIGURING:
-
+                    if (client.available())
+                    {
+                        String configData = client.readStringUntil('\n');
+                        configData.trim();
+                        log_i("Received Config Data");
+                        configUpdater(configData, ADC);
+                    }
                     break;
             }
             previousState = currentState;
@@ -185,6 +182,104 @@ void loop()
         numPacket = 0;
     }
 };
+
+void setupTimer()
+{
+    // Initialize the hardware timer
+    timer = timerBegin(TIMER_SCALE);  // timer 0, count up
+    timerAttachInterrupt(timer, &onTimer);
+    timerAlarm(timer, timer_interval_us, true, 0);  // auto-reload true
+}
+
+void stopTimer()
+{
+    if (timer != NULL)
+    {
+        timerDetachInterrupt(timer);
+        timerEnd(timer);
+        timer = NULL;
+    }
+}
+
+void configUpdater(String configData, ADS8686S_SPI_Handler* ADC)
+{
+    int configArr[3] = {0};
+    int index = 0;
+    char configBuffer[configData.length() + 1];
+    configData.toCharArray(configBuffer, sizeof(configBuffer));
+
+    char* token = strtok(configBuffer, ",");
+    while (token != NULL && index < 3)
+    {
+        configArr[index] = atoi(token);
+        index++;
+        token = strtok(NULL, ",");
+    };
+    Config cfg = {configArr[0], configArr[1], configArr[2]};
+
+    const int SAMPLE_RATE_MAP[] = {5000, 2000, 1000, 500};  // 200,500,1000,2000 Hz
+    timer_interval_us =
+        (cfg.sample_rate >= 0 && cfg.sample_rate < 4) ? SAMPLE_RATE_MAP[cfg.sample_rate] : 5000;
+
+    std::unordered_map<int, std::array<uint16_t, 3>> ADC_RANGE_MAP = {
+        {0, {0x8855U, 0x8A55U, 0x8C55U, 0x8E55U}},  // 2.5V
+        {1, {0x88AAU, 0x8AAAU, 0x8CAAU, 0x8EAAU}},  // 5V
+        {2, {0x88FFU, 0x8AFFU, 0x8CFFU, 0x8EFFU}}   // 10V
+    };
+    if (ADC_RANGE_MAP.find(cfg.adc_range) != ADC_RANGE_MAP.end())
+    {
+        auto& config_vals = ADC_RANGE_MAP[cfg.adc_range];
+        for (size_t i = 0; i < config_vals.size(); i++)
+        {
+            ADC->setConfigElem(config_vals[i], i + 1);
+        }
+    };
+
+    switch (cfg.operation_mode)
+    {
+        case 0:  // default case - use all multiplexer channels
+        {
+            break;
+        }
+        case 1:  // default case - use all multiplexer channels
+        {
+            break;
+        }
+        case 2:  // default case - use all multiplexer channels
+        {
+            break;
+        }
+        case 3:  // default case - use all multiplexer channels
+        {
+            break;
+        }
+        case 4:  // default case - use all multiplexer channels
+        {
+            break;
+        }
+        default:  // default to default case
+        {
+            break;
+        }
+    }
+
+    // turn on OSR and lock MUX to one channel
+    std::unordered_map<int, std::function<void()>> OPERATION_MODE_MAP = {
+        {0, []() { defaultOperation(); }}, {1, []() { singleColumn(1); }},
+        {2, []() { singleColumn(2); }},    {3, []() { singleColumn(3); }},
+        {4, []() { singleColumn(4); }},
+    };
+
+    if (OPERATION_MODE_MAP.find(cfg.operation_mode) != OPERATION_MODE_MAP.end())
+    {
+        OPERATION_MODE_MAP[cfg.operation_mode]();
+    }
+
+    ADC->configureADC();
+};
+
+void defaultOperation() {};
+void singleColumn(int col) {};
 
 void pinSetup()
 {
