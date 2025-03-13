@@ -9,18 +9,21 @@
 #include "driver/gpio.h"  // GPIO drive strength functions
 #include "driver/timer.h"
 
-#define CONVST D5  // g23
-#define BUSY D4    // g22
-#define RST D6     // g16
+#define MXS1 D0  // g0
+#define MXEN D1  // g1
+#define MXS2 D2  // g2
+
+#define POWEREN D3  // g21
+#define BUSY D4     // g22
+#define CONVST D5   // g23
+#define RST D6      // g16
 
 #define MOSI D10  // g18
 #define MISO D9   // g20
 #define SCLK D8   // g19
 #define CS D7     // g17
 
-#define MXS1 D0
-#define MXS2 D2
-#define MXEN D1
+// Channel Map: 1 , 3 , 5 , 7 , 0 , 2 , 4 , 6
 
 // Timer parameters
 #define TIMER_DIVIDER 80  // Divides 80MHz clock to 1MHz (1us tick)
@@ -51,13 +54,14 @@ SysState previousState = IDLE;
 hw_timer_t* timer = NULL;  // Timer handler
 unsigned long numPacket = 0;
 int timer_interval_us = 1000000 / 500;
+bool singleSampleFlag = false;
+int MUX_CH = 1;
 
 void pinSetup();
 void configUpdater(String configData, ADS8686S_SPI_Handler* ADC);
 void setupTimer();
 void stopTimer();
 void defaultOperation();
-void singleColumn(int col);
 
 void IRAM_ATTR onTimer() { sampleReady = true; };
 
@@ -65,7 +69,7 @@ void setup()
 {
     pinSetup();
     esp_log_level_set("*", ESP_LOG_INFO);
-    delay(10000);
+    delay(5000);
     while (!Serial.available());  // wait for the computer
     Serial.begin(115200);
 
@@ -107,6 +111,11 @@ void setup()
 
 void loop()
 {
+    // ADC->initiateSingleSample(1);
+    // uint16_t dat1 = ADC->getReceiveBuffer(0);  // first channel of first column
+    // Serial.println(dat1);
+    // delay(1000);
+
     WiFiClient client = server.accept();  // listen for incoming clients
     if (client)
     {
@@ -157,11 +166,12 @@ void loop()
                     if (sampleReady)  // polling managed by ISR
                     {
                         sampleReady = false;
-                        ADC->initiate4Sample();
+                        singleSampleFlag ? ADC->initiateSingleSample(1) : ADC->initiate4Sample();
                         ADC->setReceiveBuffer(32, numPacket);
                         const uint16_t* dataReceived = ADC->getReceiveBuffer();
                         client.write((uint8_t*)dataReceived, 33 * sizeof(uint16_t));
                         numPacket++;
+                        Serial.println(numPacket);
                     }
                     break;
                 case CONFIGURING:
@@ -221,10 +231,10 @@ void configUpdater(String configData, ADS8686S_SPI_Handler* ADC)
     timer_interval_us =
         (cfg.sample_rate >= 0 && cfg.sample_rate < 4) ? SAMPLE_RATE_MAP[cfg.sample_rate] : 5000;
 
-    std::unordered_map<int, std::array<uint16_t, 3>> ADC_RANGE_MAP = {
-        {0, {0x8855U, 0x8A55U, 0x8C55U, 0x8E55U}},  // 2.5V
-        {1, {0x88AAU, 0x8AAAU, 0x8CAAU, 0x8EAAU}},  // 5V
-        {2, {0x88FFU, 0x8AFFU, 0x8CFFU, 0x8EFFU}}   // 10V
+    std::unordered_map<int, std::array<uint16_t, 4>> ADC_RANGE_MAP = {
+        {0, {0x8855U, 0x8A55U, 0x8C55U, 0x8E55U}},  // 2V
+        {1, {0x88AAU, 0x8AAAU, 0x8CAAU, 0x8EAAU}},  // 4V
+        {2, {0x88FFU, 0x8AFFU, 0x8CFFU, 0x8EFFU}}   // 8V
     };
     if (ADC_RANGE_MAP.find(cfg.adc_range) != ADC_RANGE_MAP.end())
     {
@@ -235,65 +245,54 @@ void configUpdater(String configData, ADS8686S_SPI_Handler* ADC)
         }
     };
 
-    switch (cfg.operation_mode)
+    auto singleColumn = [&](int col)
     {
-        case 0:  // default case - use all multiplexer channels
-        {
-            break;
-        }
-        case 1:  // default case - use all multiplexer channels
-        {
-            break;
-        }
-        case 2:  // default case - use all multiplexer channels
-        {
-            break;
-        }
-        case 3:  // default case - use all multiplexer channels
-        {
-            break;
-        }
-        case 4:  // default case - use all multiplexer channels
-        {
-            break;
-        }
-        default:  // default to default case
-        {
-            break;
-        }
-    }
+        ADC->setConfigElem(0x846CU, 0);  // OSR set to 011b (8 samples OSR)
+        MUX_CH = col;
+    };
 
     // turn on OSR and lock MUX to one channel
     std::unordered_map<int, std::function<void()>> OPERATION_MODE_MAP = {
-        {0, []() { defaultOperation(); }}, {1, []() { singleColumn(1); }},
-        {2, []() { singleColumn(2); }},    {3, []() { singleColumn(3); }},
-        {4, []() { singleColumn(4); }},
+        {0, []() { defaultOperation(); }}, {1, [&]() { singleColumn(1); }},
+        {2, [&]() { singleColumn(2); }},   {3, [&]() { singleColumn(3); }},
+        {4, [&]() { singleColumn(4); }},
     };
 
     if (OPERATION_MODE_MAP.find(cfg.operation_mode) != OPERATION_MODE_MAP.end())
     {
         OPERATION_MODE_MAP[cfg.operation_mode]();
-    }
+    };
 
-    ADC->configureADC();
+    try
+    {
+        ADC->configureADC();
+    }
+    catch (...)
+    {
+        log_e("Updated Configuration Failure");
+    }
 };
 
 void defaultOperation() {};
-void singleColumn(int col) {};
 
 void pinSetup()
 {
-    pinMode(LED_BUILTIN, OUTPUT);
-    pinMode(CONVST, OUTPUT);
+    pinMode(MXS1, OUTPUT);
+    pinMode(MXEN, OUTPUT);
+    pinMode(MXS2, OUTPUT);
+    pinMode(POWEREN, OUTPUT);
     pinMode(BUSY, INPUT);
+    pinMode(CONVST, OUTPUT);
     pinMode(RST, OUTPUT);
+
     pinMode(MOSI, OUTPUT);
     pinMode(MISO, INPUT);
     pinMode(SCLK, OUTPUT);
     pinMode(CS, OUTPUT);
-    pinMode(MXS1, OUTPUT);
-    pinMode(MXS2, OUTPUT);
-    pinMode(MXEN, OUTPUT);
+
+    pinMode(LED_BUILTIN, OUTPUT);
+
+    digitalWrite(POWEREN, HIGH);
     digitalWrite(RST, LOW);
     digitalWrite(CONVST, LOW);
     digitalWrite(MXS1, LOW);

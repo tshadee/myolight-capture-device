@@ -13,7 +13,7 @@
 #define WIFI_CONNECTIONS 1         // number of connections to softAP
 
 // SPI
-#define SPI_FREQ 2400000  // 2.4 MHz for now. Upper limit is 50 MHz
+#define SPI_FREQ 10000000  // 2.4 MHz for now. Upper limit is 50 MHz
 
 /*
 
@@ -69,6 +69,16 @@ log_v (verbose) (highest)
 #define SEQ_STACK_1_DEFAULT_CFG 0xC256U
 #define SEQ_STACK_2_DEFAULT_CFG 0xC465U
 #define SEQ_STACK_3_DEFAULT_CFG 0xC77BU
+
+#define RANGE_A1_MAX_CFG 0x8800U
+#define RANGE_A2_MAX_CFG 0x8A00U
+#define RANGE_B1_MAX_CFG 0x8C00U
+#define RANGE_B2_MAX_CFG 0x8E00U
+
+#define RANGE_A1_MID_CFG 0x88AAU
+#define RANGE_A2_MID_CFG 0x8AAAU
+#define RANGE_B1_MID_CFG 0x8CAAU
+#define RANGE_B2_MID_CFG 0x8EAAU
 
 #define RANGE_A1_DEFAULT_CFG_BIN 0b1000100001010101
 

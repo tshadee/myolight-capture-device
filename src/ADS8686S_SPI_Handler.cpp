@@ -14,8 +14,8 @@ ADS8686S_SPI_Handler::ADS8686S_SPI_Handler(gpio_num_t CS, gpio_num_t RST, gpio_n
       MXS1(MXS1),
       MXS2(MXS2),
       MXEN(MXEN),
-      configArr{CONFIG_DEFAULT_CFG,      RANGE_A1_DEFAULT_CFG,    RANGE_A2_DEFAULT_CFG,
-                RANGE_B1_DEFAULT_CFG,    RANGE_B2_DEFAULT_CFG,    LPF_DEFAULT_CFG,
+      configArr{CONFIG_DEFAULT_CFG,      RANGE_A1_MID_CFG,        RANGE_A2_MID_CFG,
+                RANGE_B1_MID_CFG,        RANGE_B2_MID_CFG,        LPF_DEFAULT_CFG,
                 SEQ_STACK_0_DEFAULT_CFG, SEQ_STACK_1_DEFAULT_CFG, SEQ_STACK_2_DEFAULT_CFG,
                 SEQ_STACK_3_DEFAULT_CFG}
 
@@ -220,7 +220,7 @@ void ADS8686S_SPI_Handler::initiateSingleSample(int MXCH)
             gpio_set_level(MXS2, LOW);
             break;
     }
-    delayMicroseconds(15);  // TODO: check settling time
+    delayMicroseconds(25);  // TODO: check settling time
     collectSamples(0);
 };
 

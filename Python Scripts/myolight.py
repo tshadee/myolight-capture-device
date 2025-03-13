@@ -508,7 +508,7 @@ def prune_data():
 def analyse_data():
     #TODO: change this into something user can input
     CSV_FILE = "data_log_pruned.csv"
-    VREF = 5.00 #change this to userinput
+    VREF = 4.016 #change this to userinput
     sample_rate = 500 #hz
     time_step = 1/sample_rate
 
@@ -575,8 +575,10 @@ def analyse_data():
     fft_results = [np.fft.fft(channel)/float(target_length)for channel in z_pad_channels]
     frequency_axis = np.fft.fftfreq(target_length, d=time_step)[:target_length//2]
     fft_truncated = [2*np.abs(fft_result[:target_length//2]) for fft_result in fft_results]
+    
     for fft in fft_truncated:
-        fft[0] /= 2
+        fft[0] = 0 #remove DC component
+        fft[np.where(frequency_axis < 20)] = 0
 
     #plt
     fig, axes = plt.subplots(4, 7, figsize=(22, 11))  # 4 rows, 8 columns
