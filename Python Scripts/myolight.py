@@ -132,7 +132,7 @@ class MYOLIGHTInterface(ctk.CTk):
 
         self.range_combo = ctk.CTkComboBox(
             self.control_frame,
-            values=["2.5","5","10"],
+            values=["2","4","8"],
             command=lambda choice: self.update_config(1,choice),
             font=("Monaco", 12),  
             dropdown_font=("Monaco", 12)  
@@ -206,20 +206,6 @@ class MYOLIGHTInterface(ctk.CTk):
         pass
 
     def start_connection(self):
-        # self.status_queue.put("Status: Scanning for MCU...")
-        # print("Status: Scanning for MCU...")
-
-        # wifi_networks = self.scan_wifi_network()
-        # print(wifi_networks)
-
-        # self.status_queue.put("Status: Connecting to Wi-Fi...")
-        # print("Status: Connecting to Wi-Fi...")
-
-        # ssid = "ESP32C6T-softAP"
-        # password = "qw12er34"
-        # connection_result = self.connect_to_wifi(ssid,password)
-        # print(connection_result)
-
         # if "Connected" in connection_result:
         self.status_queue.put("Status: Connecting to MCU...")
         print("Status: Connecting to MCU...")
@@ -384,8 +370,10 @@ class MYOLIGHTInterface(ctk.CTk):
     def send_config(self):
         if self.socket_connection:
             try:
+                self.send_command("CONFIG")
                 message=",".join(map(str, configuration_arr)) + "\n"
-                self.socket_connection.sendall(message.encode('utf-8'))
+                self.send_command(message)
+                # self.socket_connection.sendall(message.encode('utf-8'))
                 print(f"Sent config: {message}")
             except Exception as e:
                 print(f"Error sending config: {e}")

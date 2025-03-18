@@ -56,12 +56,14 @@ unsigned long numPacket = 0;
 int timer_interval_us = 1000000 / 500;
 bool singleSampleFlag = false;
 int MUX_CH = 1;
+int SampleColumn = 1;
 
 void pinSetup();
 void configUpdater(String configData, ADS8686S_SPI_Handler* ADC);
 void setupTimer();
 void stopTimer();
 void defaultOperation();
+void singleColumn(int col);
 
 void IRAM_ATTR onTimer() { sampleReady = true; };
 
@@ -70,8 +72,10 @@ void setup()
     pinSetup();
     esp_log_level_set("*", ESP_LOG_INFO);
     delay(5000);
-    while (!Serial.available());  // wait for the computer
-    Serial.begin(115200);
+    if (Serial.available())
+    {
+        Serial.begin(115200);
+    }
 
     // FSPI Initialisation
     try
@@ -111,11 +115,6 @@ void setup()
 
 void loop()
 {
-    // ADC->initiateSingleSample(1);
-    // uint16_t dat1 = ADC->getReceiveBuffer(0);  // first channel of first column
-    // Serial.println(dat1);
-    // delay(1000);
-
     WiFiClient client = server.accept();  // listen for incoming clients
     if (client)
     {
@@ -166,21 +165,41 @@ void loop()
                     if (sampleReady)  // polling managed by ISR
                     {
                         sampleReady = false;
-                        singleSampleFlag ? ADC->initiateSingleSample(1) : ADC->initiate4Sample();
+                        singleSampleFlag ? ADC->initiateSingleSample(MUX_CH)
+                                         : ADC->initiate4Sample();
                         ADC->setReceiveBuffer(32, numPacket);
                         const uint16_t* dataReceived = ADC->getReceiveBuffer();
                         client.write((uint8_t*)dataReceived, 33 * sizeof(uint16_t));
                         numPacket++;
-                        Serial.println(numPacket);
+                        if (numPacket % 50 == 0)
+                        {
+                            Serial.println(numPacket);
+                        };
                     }
                     break;
                 case CONFIGURING:
-                    if (client.available())
+                    unsigned long startTime = millis();
+                    String configData = "";
+                    while ((millis() - startTime) < 2000)
                     {
-                        String configData = client.readStringUntil('\n');
-                        configData.trim();
-                        log_i("Received Config Data");
-                        configUpdater(configData, ADC);
+                        if (client.available())
+                        {
+                            configData = client.readStringUntil('\n');
+                            configData.trim();
+                            if (!configData.isEmpty())
+                            {
+                                log_i("Received Config Data");
+                                configUpdater(configData, ADC);
+                                log_i("Successfully updated ADC with new config data");
+                                currentState = IDLE;
+                            }
+                            break;
+                        }
+                    }
+                    if (configData.isEmpty())
+                    {
+                        log_w("No config received within timeout interval");
+                        currentState = IDLE;
                     }
                     break;
             }
@@ -249,6 +268,8 @@ void configUpdater(String configData, ADS8686S_SPI_Handler* ADC)
     {
         ADC->setConfigElem(0x846CU, 0);  // OSR set to 011b (8 samples OSR)
         MUX_CH = col;
+        singleSampleFlag = true;
+        log_i("Single column set");
     };
 
     // turn on OSR and lock MUX to one channel
@@ -273,7 +294,11 @@ void configUpdater(String configData, ADS8686S_SPI_Handler* ADC)
     }
 };
 
-void defaultOperation() {};
+void defaultOperation()
+{
+    singleSampleFlag = false;
+    log_i("Set to default operation");
+};
 
 void pinSetup()
 {
