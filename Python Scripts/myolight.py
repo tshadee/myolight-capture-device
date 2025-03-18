@@ -1,12 +1,9 @@
 import customtkinter as ctk
-import socket, struct, threading, csv, os, sys, subprocess, ast
+import socket, struct, threading, csv, sys, subprocess, ast
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 from queue import Queue
-from PIL import Image
-
-#TODO: statemachine and configuration
 
 #Set theme and colour options
 ctk.set_appearance_mode("light")
@@ -33,7 +30,7 @@ class MYOLIGHTInterface(ctk.CTk):
         # ---- Logo ----
         self.label = ctk.CTkLabel(
             self.button_frame,  # Now inside button frame
-            text="MYOLIGHT v0.2",
+            text="MYOLIGHT v0.4",
             font=("Monaco", 16)
         )
         self.label.pack(pady=5)
@@ -176,7 +173,8 @@ class MYOLIGHTInterface(ctk.CTk):
         sys.stdout = self
 
         #threading
-        self.stop_event = threading.Event()
+        self.stop_listening_event = threading.Event()
+        self.stop_data_event = threading.Event()
         self.collection_thread = None
         self.status_queue = Queue()
         self.after(100, self.process_status_queue)
@@ -204,17 +202,36 @@ class MYOLIGHTInterface(ctk.CTk):
             self.socket_connection.connect(('192.168.4.1', 666))
             self.status_queue.put("Status: Connected to MCU at IP: 192.168.4.1 , Port: 666")
             print("Status: Connected to MCU at IP: 192.168.4.1 , Port: 666")
+
             self.connect_button.configure(state="disabled")
             self.disconnect_button.configure(state="normal")
             self.start_button.configure(state="normal")
             self.stop_button.configure(state="normal")
             self.analyse_button.configure(state="disabled")
             self.config_button.configure(state="normal")
+
+            self.stop_listening_event.clear()
+            self.listener_thread = threading.Thread(target=self.passive_listen_mcu,daemon=True)
+            self.listener_thread.start()
+
         except Exception as e:
             self.status_queue.put(f"Error: {e}")
         # else:
         #     self.status_queue.put("Status: Failed to connect to Wi-Fi.")
         #     print("Status: Failed to connect to Wi-Fi.")
+
+    def passive_listen_mcu(self):
+        while not self.stop_listening_event.is_set():
+            try:
+                if self.socket_connection:
+                    message = self.socket_connection.recv(1024).decode('utf-8').strip()
+                    if message:
+                        print(f"[MCU]: {message}")
+            except socket.timeout:
+                continue
+            except Exception as e:
+                print(f"Listener Error: {e}")
+            break
 
     def scan_wifi_network(self):
         try:
@@ -269,11 +286,13 @@ class MYOLIGHTInterface(ctk.CTk):
             if self.collection_thread and self.collection_thread.is_alive():
                 self.stop_data_collection()
             if self.socket_connection:
+                self.stop_listening_event.set()
                 self.socket_connection.close()
                 self.socket_connection = None
                 self.status_queue.put("Status: Disconnected from MCU.")
                 print("Status: Disconnected from MCU.")
                 self.socket_connection = None
+
                 self.connect_button.configure(state="normal")
                 self.disconnect_button.configure(state="disabled")
                 self.start_button.configure(state="disabled")
@@ -300,14 +319,14 @@ class MYOLIGHTInterface(ctk.CTk):
         self.stop_button.configure(state="normal")
         self.analyse_button.configure(state="disabled")
         self.config_button.configure(state="disabled")
-        self.stop_event.clear()
+        self.stop_data_event.clear()
         self.collection_thread = threading.Thread(target=self.collect_data, daemon=True)
         self.collection_thread.start()
 
     def stop_data_collection(self):
         self.send_command("STOP")
         self.status_queue.put("Status: Stopping...")
-        self.stop_event.set()
+        self.stop_data_event.set()
         self.after(100, self.check_collection_thread)
         self.connect_button.configure(state="disabled")
         self.disconnect_button.configure(state="normal")
@@ -353,8 +372,6 @@ class MYOLIGHTInterface(ctk.CTk):
                 self.send_command("CONFIG")
                 message=",".join(map(str, configuration_arr)) + "\n"
                 self.send_command(message)
-                # self.socket_connection.sendall(message.encode('utf-8'))
-                print(f"Sent config: {message}")
             except Exception as e:
                 print(f"Error sending config: {e}")
 
@@ -388,7 +405,7 @@ class MYOLIGHTInterface(ctk.CTk):
                     writer = csv.writer(file)
                     writer.writerow(['CH1', 'CH2', 'CH3', 'CH4', 'PacketNumber'])
 
-                    while not self.stop_event.is_set():
+                    while not self.stop_data_event.is_set():
                         data = b''
                         while len(data) < BUFFER_SIZE:
                             try:
@@ -397,12 +414,12 @@ class MYOLIGHTInterface(ctk.CTk):
                                     break
                                 data += packet
                             except socket.timeout:
-                                if self.stop_event.is_set():
+                                if self.stop_data_event.is_set():
                                     break
                                 continue
-                            if self.stop_event.is_set():
+                            if self.stop_data_event.is_set():
                                 break
-                        if self.stop_event.is_set():
+                        if self.stop_data_event.is_set():
                             break
                         if not data:
                             break
@@ -462,7 +479,7 @@ def prune_data():
             ch2 = tuple(int(channels[j][i]) for j in range(8, 16))
             ch3 = tuple(int(channels[j][i]) for j in range(16, 24))
             ch4 = tuple(int(channels[j][i]) for j in range(24, 32))
-            if (ch1[6] == -21846):
+            if (ch1[6] == -21846 or ch2[6] == -21846 or ch3[6] == -21846 or ch4[6] == -21846):
                 row = [ch1, ch2, ch3, ch4, packet_numbers[i]]
                 output_array.append(row)
             else:
@@ -548,8 +565,17 @@ def analyse_data():
 
     #fft compute
     fft_results = [np.fft.fft(channel)/float(target_length)for channel in z_pad_channels]
-    frequency_axis = np.fft.fftfreq(target_length, d=time_step)[:target_length//2]
-    fft_truncated = [2*np.abs(fft_result[:target_length//2]) for fft_result in fft_results]
+    frequency_axis = np.fft.fftfreq(target_length, d=time_step)
+
+    #positive frequencies
+    half_length = target_length//2
+    frequency_axis = frequency_axis[:half_length]
+    fft_truncated = [2*np.abs(fft_result[:half_length]) for fft_result in fft_results]
+
+    #limit to 250 hz bin
+    valid_bins = np.where(frequency_axis <= 250)
+    frequency_axis = frequency_axis[valid_bins]
+    fft_truncated = [fft_result[valid_bins] for fft_result in fft_truncated]
     
     for fft in fft_truncated:
         fft[0] = 0 #remove DC component

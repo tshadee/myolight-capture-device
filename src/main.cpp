@@ -46,14 +46,18 @@ struct Config
 
 // Global Variables
 volatile bool sampleReady = false;  // Flag set by the ISR
-WiFiServer server(WIFI_PORT);       // port DOOM 666
+WiFiServer server(WIFI_PORT);       // port DOOM
+// WiFiServer debug(WIFI_DEBUG);       // port DOOM-1
+// WiFiClient serverClient;            // all data go to this
+// WiFiClient debugClient;             // everything else
 SPIClass* vspi = NULL;
 ADS8686S_SPI_Handler* ADC = NULL;
 SysState currentState = IDLE;
 SysState previousState = IDLE;
 hw_timer_t* timer = NULL;  // Timer handler
 unsigned long numPacket = 0;
-int timer_interval_us = 1000000 / 500;
+int timer_interval_us =
+    1000000 / 500;  // sampling and wifi will default to 500 hz unless changed by config update
 bool singleSampleFlag = false;
 int MUX_CH = 1;
 int SampleColumn = 1;
@@ -108,6 +112,7 @@ void setup()
     };
     IPAddress myIP = WiFi.softAPIP();  // set IP
     server.begin();                    // start TCP server
+    // debug.begin();
     log_i("SAP CFG GOOD");
     Serial.print("AP IP ADDR: ");
     Serial.println(myIP);
@@ -118,7 +123,7 @@ void loop()
     WiFiClient client = server.accept();  // listen for incoming clients
     if (client)
     {
-        Serial.println("New Client.");  // print a message out the serial port
+        client.write("Connected");
         while (client.connected())
         {  // loop while the client's connected
             if (client.available())
@@ -129,6 +134,7 @@ void loop()
                 if (command == "START")
                 {
                     log_i("START GOT");
+                    client.write("START");
                     switch (previousState)
                     {
                         case SENDING_DATA:
@@ -146,12 +152,14 @@ void loop()
                 else if (command == "STOP")
                 {
                     log_i("STOP GOT");
+                    client.write("STOP");
                     currentState = IDLE;
                     stopTimer();
                 }
                 else if (command == "CONFIG")
                 {
                     log_i("CONFIG GOT");
+                    client.write("CONFIG");
                     currentState = CONFIGURING;
                 };
             };
@@ -191,6 +199,7 @@ void loop()
                                 log_i("Received Config Data");
                                 configUpdater(configData, ADC);
                                 log_i("Successfully updated ADC with new config data");
+                                client.write("Config Done");
                                 currentState = IDLE;
                             }
                             break;

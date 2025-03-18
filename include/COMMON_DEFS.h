@@ -11,6 +11,7 @@
 #define WIFI_CHANNEL 1             // supports ch 1 - 13
 #define WIFI_SSID_HIDDEN false     // actually demands int but :shrugg:
 #define WIFI_CONNECTIONS 1         // number of connections to softAP
+#define WIFI_DEBUG 665
 
 // SPI
 #define SPI_FREQ 10000000  // 2.4 MHz for now. Upper limit is 50 MHz

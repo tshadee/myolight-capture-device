@@ -221,7 +221,7 @@ void ADS8686S_SPI_Handler::initiateSingleSample(int MXCH)
             break;
     }
     delayMicroseconds(25);  // TODO: check settling time
-    collectSamples(0);
+    collectSamples((MXCH - 1) * 8);
 };
 
 void ADS8686S_SPI_Handler::collectSamples(int startIndex)
