@@ -82,17 +82,6 @@ class MYOLIGHTInterface(ctk.CTk):
         )
         self.stop_button.pack(pady=2)
 
-        #prune data
-        self.prune_button = ctk.CTkButton(
-            self.button_frame, 
-            text="Prune Data", 
-            font=("Monaco", 12),
-            command=self.start_pruning,
-            state="normal",
-            corner_radius=0,
-            width=160)
-        self.prune_button.pack(pady=2)
-
         #analyse data
         self.analyse_button = ctk.CTkButton(
             self.button_frame, 
@@ -219,7 +208,6 @@ class MYOLIGHTInterface(ctk.CTk):
             self.disconnect_button.configure(state="normal")
             self.start_button.configure(state="normal")
             self.stop_button.configure(state="normal")
-            self.prune_button.configure(state="disabled")
             self.analyse_button.configure(state="disabled")
             self.config_button.configure(state="normal")
         except Exception as e:
@@ -290,7 +278,6 @@ class MYOLIGHTInterface(ctk.CTk):
                 self.disconnect_button.configure(state="disabled")
                 self.start_button.configure(state="disabled")
                 self.stop_button.configure(state="disabled")
-                self.prune_button.configure(state="normal")
                 self.analyse_button.configure(state="normal")
                 self.config_button.configure(state="disabled")
         except Exception as e:
@@ -311,7 +298,6 @@ class MYOLIGHTInterface(ctk.CTk):
         self.status_queue.put("Status: Collecting Data...")
         self.start_button.configure(state="disabled")
         self.stop_button.configure(state="normal")
-        self.prune_button.configure(state="disabled")
         self.analyse_button.configure(state="disabled")
         self.config_button.configure(state="disabled")
         self.stop_event.clear()
@@ -327,7 +313,6 @@ class MYOLIGHTInterface(ctk.CTk):
         self.disconnect_button.configure(state="normal")
         self.start_button.configure(state="normal")
         self.stop_button.configure(state="disabled")
-        self.prune_button.configure(state="normal")
         self.analyse_button.configure(state="normal")
         self.config_button.configure(state="normal")
         
@@ -345,15 +330,10 @@ class MYOLIGHTInterface(ctk.CTk):
             self.start_button.configure(state="normal")
             self.stop_button.configure(state="disabled")
 
-    def start_pruning(self):
-        #main thread
-        self.status_queue.put("Status: Pruning Data...")
-        prune_data()
-        self.status_queue.put("Status: Pruning Complete")
-        print("[DONE] Pruning Complete")
-
     def start_analysis(self):
         #main thread
+        prune_data()
+        print("[DONE] Pruning Complete")
         self.status_queue.put("Status: Analysing Data...")
         analyse_data()
         self.status_queue.put("Status: Analysis Complete")
@@ -379,15 +359,24 @@ class MYOLIGHTInterface(ctk.CTk):
                 print(f"Error sending config: {e}")
 
     def update_config(self,index,choice):
+        global sample_range, sample_rate
+
         mapping = [
         {"200": 0, "500": 1, "1000": 2, "2000": 3},  # Sample rate
-        {"2.5": 0, "5": 1, "10": 2},  # Range
+        {"2": 0, "4": 1, "8": 2},  # Range
         {"Default": 0, "Single Row (1)": 1, "Single Row (2)": 2, "Single Row (3)": 3, "Single Row (4)": 4}  # Op Mode
         ]
 
         if choice in mapping[index]:
             configuration_arr[index] = mapping[index][choice]
             print(f"Updated config[{index}] -> {configuration_arr[index]}")
+
+            if index == 0:
+                sample_rate = int(choice)
+                print(f"Updated sample_rate -> {sample_rate}")
+            elif index == 1:
+                sample_range = int(choice)
+                print(f"Updated sample_range -> {sample_range}")
 
     def collect_data(self):
         BUFFER_SIZE = 66
@@ -496,8 +485,6 @@ def prune_data():
 def analyse_data():
     #TODO: change this into something user can input
     CSV_FILE = "data_log_pruned.csv"
-    VREF = 4.016 #change this to userinput
-    sample_rate = 500 #hz
     time_step = 1/sample_rate
 
     channels = []
@@ -532,7 +519,7 @@ def analyse_data():
 
     print(f"[INFO] Loaded data shape: {channels.shape}")  # should be (N, 32)
 
-    channels *= (VREF/2**15) #normalisation and scaling to VREF
+    channels *= (sample_range/2**15) #normalisation and scaling to VREF
 
     min_packet = np.min(packet_numbers)
     max_packet = np.max(packet_numbers)
