@@ -123,7 +123,8 @@ void loop()
     WiFiClient client = server.accept();  // listen for incoming clients
     if (client)
     {
-        client.write("Connected");
+        // client.write("Connected");
+        log_i("Client Connected");
         while (client.connected())
         {  // loop while the client's connected
             if (client.available())
@@ -134,7 +135,7 @@ void loop()
                 if (command == "START")
                 {
                     log_i("START GOT");
-                    client.write("START");
+                    // client.write("START");
                     switch (previousState)
                     {
                         case SENDING_DATA:
@@ -152,14 +153,14 @@ void loop()
                 else if (command == "STOP")
                 {
                     log_i("STOP GOT");
-                    client.write("STOP");
+                    // client.write("STOP");
                     currentState = IDLE;
                     stopTimer();
                 }
                 else if (command == "CONFIG")
                 {
                     log_i("CONFIG GOT");
-                    client.write("CONFIG");
+                    // client.write("CONFIG");
                     currentState = CONFIGURING;
                 };
             };
@@ -199,7 +200,7 @@ void loop()
                                 log_i("Received Config Data");
                                 configUpdater(configData, ADC);
                                 log_i("Successfully updated ADC with new config data");
-                                client.write("Config Done");
+                                // client.write("Config Done");
                                 currentState = IDLE;
                             }
                             break;
@@ -216,7 +217,7 @@ void loop()
         }
         // close the connection:
         client.stop();
-        Serial.println("\nClient Disconnected.");
+        log_i("Client Disconnected");
         numPacket = 0;
     }
 };
