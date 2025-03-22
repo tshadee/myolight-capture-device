@@ -68,6 +68,8 @@ void setupTimer();
 void stopTimer();
 void defaultOperation();
 void singleColumn(int col);
+void sendText(WiFiClient& client, const String& text);
+void sendData(WiFiClient& client, const uint8_t* data);
 
 void IRAM_ATTR onTimer() { sampleReady = true; };
 
@@ -124,16 +126,47 @@ void loop()
 {
     if (!serverClient || !serverClient.connected())
     {
-        WiFiClient temp = server.accept();
-        if (temp)
-        {
-            serverClient = temp;
-            serverClient.write("Data Connected");
-            log_i("Data Connected");
-            log_i("Client connected on port: %d", temp.localPort());
-            log_i("Remote port: %d", temp.remotePort());
-        }
-    };
+        log_i("Client Connected");
+        sendText(client, "Client Connected");
+        while (client.connected())
+        {  // loop while the client's connected
+            if (client.available())
+            {
+                String command = client.readStringUntil('\n');
+                command.trim();
+                // good ol statemachine
+                if (command == "START")
+                {
+                    log_i("START GOT");
+                    sendText(client, "Starting");
+                    switch (previousState)
+                    {
+                        case SENDING_DATA:
+                            currentState = SENDING_DATA;
+                            break;
+                        case IDLE:
+                            currentState = SENDING_DATA;
+                            setupTimer();
+                            break;
+                        case CONFIGURING:
+                            currentState = IDLE;
+                            break;
+                    }
+                }
+                else if (command == "STOP")
+                {
+                    log_i("STOP GOT");
+                    sendText(client, "Stopping");
+                    currentState = IDLE;
+                    stopTimer();
+                }
+                else if (command == "CONFIG")
+                {
+                    log_i("CONFIG GOT");
+                    sendText(client, "Configuration");
+                    currentState = CONFIGURING;
+                };
+            };
 
     if (!debugClient || !debugClient.connected())
     {
@@ -166,64 +199,42 @@ void loop()
             switch (previousState)
             {
                 case SENDING_DATA:
-                    currentState = SENDING_DATA;
-                    break;
-                case IDLE:
-                    currentState = SENDING_DATA;
-                    setupTimer();
+                    if (sampleReady)  // polling managed by ISR
+                    {
+                        sampleReady = false;
+                        singleSampleFlag ? ADC->initiateSingleSample(MUX_CH)
+                                         : ADC->initiate4Sample();
+                        ADC->setReceiveBuffer(32, numPacket);
+                        const uint16_t* dataReceived = ADC->getReceiveBuffer();
+                        sendData(client, (uint8_t*)dataReceived);
+                        numPacket++;
+                        if (numPacket % 100 == 0)
+                        {
+                            log_i("%d", numPacket);
+                        };
+                    }
                     break;
                 case CONFIGURING:
-                    currentState = IDLE;
-                    break;
-            }
-        }
-        else if (command == "STOP")
-        {
-            log_i("STOP GOT");
-            debugClient.write("STOP");
-            currentState = IDLE;
-            stopTimer();
-        }
-        else if (command == "CONFIG")
-        {
-            log_i("CONFIG GOT");
-            debugClient.write("CONFIG");
-            currentState = CONFIGURING;
-        };
-    }
-
-    // state machine
-
-    switch (currentState)
-    {
-        case IDLE:
-            numPacket = 0;
-            break;
-        case SENDING_DATA:
-            if (sampleReady)  // polling managed by ISR
-            {
-                sampleReady = false;
-                singleSampleFlag ? ADC->initiateSingleSample(MUX_CH) : ADC->initiate4Sample();
-                ADC->setReceiveBuffer(32, numPacket);
-                const uint16_t* dataReceived = ADC->getReceiveBuffer();
-                serverClient.write((uint8_t*)dataReceived, 33 * sizeof(uint16_t));
-                numPacket++;
-                if (numPacket % 50 == 0)
-                {
-                    Serial.println(numPacket);
-                };
-            }
-            break;
-        case CONFIGURING:
-            unsigned long startTime = millis();
-            String configData = "";
-            while ((millis() - startTime) < 2000)
-            {
-                if (debugClient.available())
-                {
-                    configData = debugClient.readStringUntil('\n');
-                    configData.trim();
-                    if (!configData.isEmpty())
+                    unsigned long startTime = millis();
+                    String configData = "";
+                    while ((millis() - startTime) < 2000)
+                    {
+                        if (client.available())
+                        {
+                            configData = client.readStringUntil('\n');
+                            configData.trim();
+                            if (!configData.isEmpty())
+                            {
+                                log_i("Received Config Data");
+                                configUpdater(configData, ADC);
+                                log_i("Successfully updated ADC with new config data");
+                                sendText(client, "ADC Configured");
+                                currentState = IDLE;
+                            }
+                            break;
+                        }
+                    }
+                    if (configData.isEmpty())
                     {
                         log_i("Received Config Data");
                         configUpdater(configData, ADC);
@@ -234,12 +245,12 @@ void loop()
                     break;
                 }
             }
-            if (configData.isEmpty())
-            {
-                log_w("No config received within timeout interval");
-                currentState = IDLE;
-            }
-            break;
+            previousState = currentState;
+        }
+        // close the connection
+        client.stop();
+        log_i("Client Disconnected");
+        numPacket = 0;
     }
     previousState = currentState;
 
@@ -344,6 +355,31 @@ void defaultOperation()
 {
     singleSampleFlag = false;
     log_i("Set to default operation");
+};
+
+void sendText(WiFiClient& client, const String& text)
+{
+    uint8_t type = 0x01;
+    uint16_t len = text.length();
+    std::vector<uint8_t> packet;
+    packet.push_back(type);
+    packet.push_back(len & 0xFF);
+    packet.push_back((len >> 8) & 0xFF);
+    packet.insert(packet.end(), text.begin(), text.end());
+    client.write(packet.data(), packet.size());
+};
+
+void sendData(WiFiClient& client, const uint8_t* data)
+{
+    uint8_t type = 0x02;
+    uint16_t len = 66;
+
+    uint8_t packet[3 + 66];
+    packet[0] = type;
+    packet[1] = len & 0xFF;
+    packet[2] = (len >> 8) & 0xFF;
+    memcpy(&packet[3], data, 66);
+    client.write(packet, sizeof(packet));
 };
 
 void pinSetup()

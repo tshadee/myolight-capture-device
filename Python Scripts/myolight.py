@@ -2,6 +2,7 @@ import customtkinter as ctk
 import socket, struct, threading, csv, sys, subprocess, ast
 import numpy as np
 import matplotlib.pyplot as plt
+import select
 from scipy.interpolate import interp1d
 from queue import Queue
 
@@ -172,14 +173,14 @@ class MYOLIGHTInterface(ctk.CTk):
         sys.stdout = self
 
         #threading
-        self.stop_listening_event = threading.Event()
-        self.stop_data_event = threading.Event()
+        self.stop_active_data_thread_event = threading.Event()
+        # self.stop_data_event = threading.Event()
         self.collection_thread = None
         self.status_queue = Queue()
         self.after(100, self.process_status_queue)
 
-        self.socket_data_connection = None
-        self.socket_debug_connection = None
+        self.socket_connection = None
+        self.active_data_thread = None
 
     def write(self,message):
         #print statements to this textbox
@@ -195,20 +196,13 @@ class MYOLIGHTInterface(ctk.CTk):
     def start_connection(self):
         # if "Connected" in connection_result:
         self.status_queue.put("Status: Connecting to MCU...")
-        print("Status: Connecting to MCU...")
+        print("[CONN] Connecting to MCU...")
         try:
-            self.socket_data_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket_data_connection.settimeout(5) 
-            self.socket_data_connection.connect(('192.168.4.1', 666))
+            self.socket_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket_connection.settimeout(5) 
+            self.socket_connection.connect(('192.168.4.1', 666))
             print("[INFO] Data Port Connected (666)")
-
-            self.socket_debug_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket_debug_connection.settimeout(5) 
-            self.socket_debug_connection.connect(('192.168.4.1', 665))
-            print("[INFO] Debug Port Connected (665)")
-
-            self.status_queue.put("Status: Connected to MCU (Data: 666 , Debug: 665)")
-            print("Status: Connected to MCU (Data: 666 , Debug: 665)")
+            self.status_queue.put("Status: Connected to MCU (Data: 666)")
 
             self.connect_button.configure(state="disabled")
             self.disconnect_button.configure(state="normal")
@@ -217,53 +211,37 @@ class MYOLIGHTInterface(ctk.CTk):
             self.analyse_button.configure(state="disabled")
             self.config_button.configure(state="normal")
 
-            self.stop_listening_event.clear()
-            self.listener_thread = threading.Thread(target=self.passive_listen_mcu,daemon=True)
-            self.listener_thread.start()
+            self.stop_active_data_thread_event.clear()
+            self.active_data_thread = threading.Thread(target=self.run_data_thread,daemon=True)
+            self.active_data_thread.start()
 
         except Exception as e:
-            self.status_queue.put(f"[ERROR] Connection Failed: {e}")
+            self.status_queue.put(f"[ERROR] start_connection: {e}")
 
-    def passive_listen_mcu(self):
-        while not self.stop_listening_event.is_set():
-            try:
-                if self.socket_debug_connection:
-                    message = self.socket_debug_connection.recv(1024).decode('utf-8').strip()
-                    if message:
-                        print(f"[MCU]: {message}")
-            except socket.timeout:
-                continue
-            except Exception as e:
-                print(f"Listener Error: {e}")
-            break
 
     def stop_connection(self):
         try:
             if self.collection_thread and self.collection_thread.is_alive():
                 self.stop_data_collection()
+                
+            if self.socket_connection:
+                self.stop_active_data_thread_event.set()
+                self.socket_connection.close()
+                self.socket_connection = None
 
-            self.stop_listening_event.set()
-            self.stop_data_event.set()
+            self.status_queue.put("[CONN] Disconnected from MCU")
+            print("[CONN] Disconnected from MCU")
 
-            if self.socket_data_connection:
-                self.socket_data_connection.close()
-                self.socket_data_connection = None
-            if self.socket_debug_connection:
-                self.socket_debug_connection.close()
-                self.socket_debug_connection = None
-
-            self.status_queue.put("Status: Disconnected from MCU.")
-            print("Status: Disconnected from MCU.")
             self.connect_button.configure(state="normal")
             self.disconnect_button.configure(state="disabled")
             self.start_button.configure(state="disabled")
             self.stop_button.configure(state="disabled")
             self.analyse_button.configure(state="normal")
-
             self.config_button.configure(state="disabled")
+
         except Exception as e:
-            self.status_queue.put(f"Error: {e}")
-            print(f"Error: {e}")
+            self.status_queue.put(f"[ERROR] stop_connection: {e}")
+            print(f"[ERROR] stop_connection: {e}")
 
     def process_status_queue(self):
         try:
@@ -281,15 +259,12 @@ class MYOLIGHTInterface(ctk.CTk):
         self.stop_button.configure(state="normal")
         self.analyse_button.configure(state="disabled")
         self.config_button.configure(state="disabled")
-        self.stop_data_event.clear()
-        self.collection_thread = threading.Thread(target=self.collect_data, daemon=True)
-        self.collection_thread.start()
 
     def stop_data_collection(self):
         self.send_command("STOP")
         self.status_queue.put("Status: Stopping...")
-        self.stop_data_event.set()
         self.after(100, self.check_collection_thread)
+
         self.connect_button.configure(state="disabled")
         self.disconnect_button.configure(state="normal")
         self.start_button.configure(state="normal")
@@ -323,8 +298,9 @@ class MYOLIGHTInterface(ctk.CTk):
         if self.socket_debug_connection:
             try:
                 message = command.strip() + "\n"
-                self.socket_debug_connection.sendall(message.encode('utf-8'))
-                print(f"Sent command: {command}")
+                self.socket_connection.sendall(message.encode('utf-8'))
+                print(f"[INFO] Sent command: {command}")
+    
             except Exception as e:
                 print(f"Error sending command: {e}")
 
@@ -332,11 +308,37 @@ class MYOLIGHTInterface(ctk.CTk):
         if self.socket_debug_connection:
             try:
                 self.send_command("CONFIG")
-                message=",".join(map(str, configuration_arr)) + "\n"
+                message=",".join(map(str, configuration_arr))
                 self.send_command(message)
             except Exception as e:
                 print(f"Error sending config: {e}")
+    
+    def read_incoming(self, sock, timeout=0.1):
+        try:
+             # Only read if data is available
+            ready_to_read, _, _ = select.select([sock], [], [], timeout)
+            if not ready_to_read:
+                return None, None  # No data — avoid errors
+        
+            header = sock.recv(3)
+            if len(header) < 3:
+                return None, None
 
+            msg_type = header[0]
+            length = struct.unpack('<H', header[1:])[0]
+
+            payload = b''
+            while len(payload) < length:
+                chunk = sock.recv(length - len(payload))
+                if not chunk:
+                    break
+                payload += chunk
+
+            return msg_type, payload
+        except Exception as e:
+            print(f"[ERROR] read_incoming: {e}")
+            return None,None
+    
     def update_config(self,index,choice):
         global sample_range, sample_rate
 
@@ -348,55 +350,47 @@ class MYOLIGHTInterface(ctk.CTk):
 
         if choice in mapping[index]:
             configuration_arr[index] = mapping[index][choice]
-            print(f"Updated config[{index}] -> {configuration_arr[index]}")
+            print(f"[INFO] Updated config[{index}] -> {configuration_arr[index]}")
 
             if index == 0:
                 sample_rate = int(choice)
-                print(f"Updated sample_rate -> {sample_rate}")
+                print(f"[INFO] Updated sample_rate -> {sample_rate}")
             elif index == 1:
                 sample_range = int(choice)
-                print(f"Updated sample_range -> {sample_range}")
+                print(f"[INFO] Updated sample_range -> {sample_range}")
 
-    def collect_data(self):
-        BUFFER_SIZE = 66
+    def run_data_thread(self):
         CSV_FILE = "data_log.csv"
+        try:
+            with open(CSV_FILE,mode='w',newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow(['CH1', 'CH2', 'CH3', 'CH4', 'PacketNumber'])
+                while not self.stop_active_data_thread_event.is_set():
+                    try:
+                        if(self.socket_connection):
+                            msg_type,payload = self.read_incoming(self.socket_connection)
+                            if msg_type == 1:
+                                print("[ECHO]",payload.decode('utf-8'))
+                            elif msg_type == 2:
+                                self.parse_data(payload,writer)
+                            elif msg_type is not None:
+                                print(f"[WARN] Unknown message type: {msg_type}")
+                    except Exception as e:
+                        print(f"[ERROR] Active Data Thread: {e}")
+        except Exception as e:
+            print(f"[ERROR] CSV Writer: {e}")
 
-        if self.socket_data_connection:
-            try:
-                with open(CSV_FILE, mode='w', newline='') as file:
-                    writer = csv.writer(file)
-                    writer.writerow(['CH1', 'CH2', 'CH3', 'CH4', 'PacketNumber'])
-
-                    while not self.stop_data_event.is_set():
-                        data = b''
-                        while len(data) < BUFFER_SIZE:
-                            try:
-                                packet = self.socket_data_connection.recv(BUFFER_SIZE - len(data))
-                                if not packet:
-                                    break
-                                data += packet
-                            except socket.timeout:
-                                if self.stop_data_event.is_set():
-                                    break
-                                continue
-                            if self.stop_data_event.is_set():
-                                break
-                        if self.stop_data_event.is_set():
-                            break
-                        if not data:
-                            break
-
-                        if len(data) == BUFFER_SIZE:
-                            CH1 = struct.unpack('<8h', data[0:16])
-                            CH2 = struct.unpack('<8h', data[16:32])
-                            CH3 = struct.unpack('<8h', data[32:48])
-                            CH4 = struct.unpack('<8h', data[48:64])
-                            packet_number = struct.unpack('<H', data[64:66])[0]
-
-                            writer.writerow([CH1, CH2, CH3, CH4, packet_number])
-
-            except Exception as e:
-                self.status_queue.put(f"Error: {e}")
+    def parse_data(self,payload,csvwriter): #this function needs to be rewritten alongside the active data thread
+        try:
+            if len(payload) == 66:
+                CH1 = struct.unpack('<8h', payload[0:16])
+                CH2 = struct.unpack('<8h', payload[16:32])
+                CH3 = struct.unpack('<8h', payload[32:48])
+                CH4 = struct.unpack('<8h', payload[48:64])
+                packet_number = struct.unpack('<H', payload[64:66])[0]
+                csvwriter.writerow([CH1, CH2, CH3, CH4, packet_number])
+        except Exception as e:
+            self.status_queue.put(f"[ERROR] parse_data: {e}")
 
 #Data Pruning
 def prune_data():
@@ -420,7 +414,7 @@ def prune_data():
                     channel_index = ch_idx * 8 + elem_idx
                     channels[channel_index].append(value)
 
-    print("[DONE] CSV Load Good")
+    print("[INFO] CSV Load Good")
     channels = [np.array(ch) for ch in channels]
     packet_numbers = np.array(packet_numbers)
     output_array = []
@@ -458,8 +452,8 @@ def prune_data():
         percentage_corrupt = 0;
     else:
         percentage_corrupt = invalid_data*100/num_rows
-    print(f"------ {invalid_data} invalid data points ({percentage_corrupt:.2f}%)")
-    print(f"[DONE] Pruned data written to {OUTPUT_FILE}.")
+    print(f"[PRCS] ------ {invalid_data} invalid data points ({percentage_corrupt:.2f}%)")
+    print(f"[INFO] Pruned data written to {OUTPUT_FILE}.")
 
 def analyse_data():
     CSV_FILE = "data_log_pruned.csv"
@@ -559,7 +553,7 @@ def analyse_data():
     #adjust for overlap
     plt.tight_layout()
     plt.show()
-    print("[DONE] Analysis Complete")
+    print("[PRCS] Analysis Complete")
 
 # main
 if __name__ == "__main__":
