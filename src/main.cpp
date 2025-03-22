@@ -68,6 +68,8 @@ void setupTimer();
 void stopTimer();
 void defaultOperation();
 void singleColumn(int col);
+void sendText(WiFiClient& client, const String& text);
+void sendData(WiFiClient& client, const uint8_t* data);
 
 void IRAM_ATTR onTimer() { sampleReady = true; };
 
@@ -123,8 +125,8 @@ void loop()
     WiFiClient client = server.accept();  // listen for incoming clients
     if (client)
     {
-        // client.write("Connected");
         log_i("Client Connected");
+        sendText(client, "Client Connected");
         while (client.connected())
         {  // loop while the client's connected
             if (client.available())
@@ -135,7 +137,7 @@ void loop()
                 if (command == "START")
                 {
                     log_i("START GOT");
-                    // client.write("START");
+                    sendText(client, "Starting");
                     switch (previousState)
                     {
                         case SENDING_DATA:
@@ -153,14 +155,14 @@ void loop()
                 else if (command == "STOP")
                 {
                     log_i("STOP GOT");
-                    // client.write("STOP");
+                    sendText(client, "Stopping");
                     currentState = IDLE;
                     stopTimer();
                 }
                 else if (command == "CONFIG")
                 {
                     log_i("CONFIG GOT");
-                    // client.write("CONFIG");
+                    sendText(client, "Configuration");
                     currentState = CONFIGURING;
                 };
             };
@@ -178,11 +180,11 @@ void loop()
                                          : ADC->initiate4Sample();
                         ADC->setReceiveBuffer(32, numPacket);
                         const uint16_t* dataReceived = ADC->getReceiveBuffer();
-                        client.write((uint8_t*)dataReceived, 33 * sizeof(uint16_t));
+                        sendData(client, (uint8_t*)dataReceived);
                         numPacket++;
-                        if (numPacket % 50 == 0)
+                        if (numPacket % 100 == 0)
                         {
-                            Serial.println(numPacket);
+                            log_i("%d", numPacket);
                         };
                     }
                     break;
@@ -200,7 +202,7 @@ void loop()
                                 log_i("Received Config Data");
                                 configUpdater(configData, ADC);
                                 log_i("Successfully updated ADC with new config data");
-                                // client.write("Config Done");
+                                sendText(client, "ADC Configured");
                                 currentState = IDLE;
                             }
                             break;
@@ -215,7 +217,7 @@ void loop()
             }
             previousState = currentState;
         }
-        // close the connection:
+        // close the connection
         client.stop();
         log_i("Client Disconnected");
         numPacket = 0;
@@ -308,6 +310,31 @@ void defaultOperation()
 {
     singleSampleFlag = false;
     log_i("Set to default operation");
+};
+
+void sendText(WiFiClient& client, const String& text)
+{
+    uint8_t type = 0x01;
+    uint16_t len = text.length();
+    std::vector<uint8_t> packet;
+    packet.push_back(type);
+    packet.push_back(len & 0xFF);
+    packet.push_back((len >> 8) & 0xFF);
+    packet.insert(packet.end(), text.begin(), text.end());
+    client.write(packet.data(), packet.size());
+};
+
+void sendData(WiFiClient& client, const uint8_t* data)
+{
+    uint8_t type = 0x02;
+    uint16_t len = 66;
+
+    uint8_t packet[3 + 66];
+    packet[0] = type;
+    packet[1] = len & 0xFF;
+    packet[2] = (len >> 8) & 0xFF;
+    memcpy(&packet[3], data, 66);
+    client.write(packet, sizeof(packet));
 };
 
 void pinSetup()
