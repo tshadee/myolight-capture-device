@@ -47,9 +47,9 @@ struct Config
 // Global Variables
 volatile bool sampleReady = false;  // Flag set by the ISR
 WiFiServer server(WIFI_PORT);       // port DOOM
-// WiFiServer debug(WIFI_DEBUG);       // port DOOM-1
-// WiFiClient serverClient;            // all data go to this
-// WiFiClient debugClient;             // everything else
+WiFiServer debug(WIFI_DEBUG);       // port DOOM-1
+WiFiClient serverClient;            // all data go to this
+WiFiClient debugClient;             // everything else
 SPIClass* vspi = NULL;
 ADS8686S_SPI_Handler* ADC = NULL;
 SysState currentState = IDLE;
@@ -112,113 +112,150 @@ void setup()
     };
     IPAddress myIP = WiFi.softAPIP();  // set IP
     server.begin();                    // start TCP server
-    // debug.begin();
+    debug.begin();
     log_i("SAP CFG GOOD");
     Serial.print("AP IP ADDR: ");
     Serial.println(myIP);
 };
 
+// update this to match client and debug channels from python (666/665)
+
 void loop()
 {
-    WiFiClient client = server.accept();  // listen for incoming clients
-    if (client)
+    if (!serverClient || !serverClient.connected())
     {
-        client.write("Connected");
-        while (client.connected())
-        {  // loop while the client's connected
-            if (client.available())
-            {
-                String command = client.readStringUntil('\n');
-                command.trim();
-                // good ol statemachine
-                if (command == "START")
-                {
-                    log_i("START GOT");
-                    client.write("START");
-                    switch (previousState)
-                    {
-                        case SENDING_DATA:
-                            currentState = SENDING_DATA;
-                            break;
-                        case IDLE:
-                            currentState = SENDING_DATA;
-                            setupTimer();
-                            break;
-                        case CONFIGURING:
-                            currentState = IDLE;
-                            break;
-                    }
-                }
-                else if (command == "STOP")
-                {
-                    log_i("STOP GOT");
-                    client.write("STOP");
-                    currentState = IDLE;
-                    stopTimer();
-                }
-                else if (command == "CONFIG")
-                {
-                    log_i("CONFIG GOT");
-                    client.write("CONFIG");
-                    currentState = CONFIGURING;
-                };
-            };
+        WiFiClient temp = server.accept();
+        if (temp)
+        {
+            serverClient = temp;
+            serverClient.write("Data Connected");
+            log_i("Data Connected");
+            log_i("Client connected on port: %d", temp.localPort());
+            log_i("Remote port: %d", temp.remotePort());
+        }
+    };
 
-            switch (currentState)
+    if (!debugClient || !debugClient.connected())
+    {
+        WiFiClient temp = debug.accept();
+        if (temp)
+        {
+            debugClient = temp;
+            debugClient.write("Debug Connected");
+            log_i("Debug Connected");
+            log_i("Client connected on port: %d", temp.localPort());
+            log_i("Remote port: %d", temp.remotePort());
+        }
+    };
+
+    if (!serverClient || !serverClient.connected() || !debugClient || !debugClient.connected())
+    {
+        return;  // Skip the rest until both are connected
+    }
+
+    // commands from cilent
+
+    if (debugClient.available())
+    {
+        String command = debugClient.readStringUntil('\n');
+        command.trim();
+        if (command == "START")
+        {
+            log_i("START GOT");
+            debugClient.write("START");
+            switch (previousState)
             {
-                case IDLE:
-                    numPacket = 0;
-                    break;
                 case SENDING_DATA:
-                    if (sampleReady)  // polling managed by ISR
-                    {
-                        sampleReady = false;
-                        singleSampleFlag ? ADC->initiateSingleSample(MUX_CH)
-                                         : ADC->initiate4Sample();
-                        ADC->setReceiveBuffer(32, numPacket);
-                        const uint16_t* dataReceived = ADC->getReceiveBuffer();
-                        client.write((uint8_t*)dataReceived, 33 * sizeof(uint16_t));
-                        numPacket++;
-                        if (numPacket % 50 == 0)
-                        {
-                            Serial.println(numPacket);
-                        };
-                    }
+                    currentState = SENDING_DATA;
+                    break;
+                case IDLE:
+                    currentState = SENDING_DATA;
+                    setupTimer();
                     break;
                 case CONFIGURING:
-                    unsigned long startTime = millis();
-                    String configData = "";
-                    while ((millis() - startTime) < 2000)
+                    currentState = IDLE;
+                    break;
+            }
+        }
+        else if (command == "STOP")
+        {
+            log_i("STOP GOT");
+            debugClient.write("STOP");
+            currentState = IDLE;
+            stopTimer();
+        }
+        else if (command == "CONFIG")
+        {
+            log_i("CONFIG GOT");
+            debugClient.write("CONFIG");
+            currentState = CONFIGURING;
+        };
+    }
+
+    // state machine
+
+    switch (currentState)
+    {
+        case IDLE:
+            numPacket = 0;
+            break;
+        case SENDING_DATA:
+            if (sampleReady)  // polling managed by ISR
+            {
+                sampleReady = false;
+                singleSampleFlag ? ADC->initiateSingleSample(MUX_CH) : ADC->initiate4Sample();
+                ADC->setReceiveBuffer(32, numPacket);
+                const uint16_t* dataReceived = ADC->getReceiveBuffer();
+                serverClient.write((uint8_t*)dataReceived, 33 * sizeof(uint16_t));
+                numPacket++;
+                if (numPacket % 50 == 0)
+                {
+                    Serial.println(numPacket);
+                };
+            }
+            break;
+        case CONFIGURING:
+            unsigned long startTime = millis();
+            String configData = "";
+            while ((millis() - startTime) < 2000)
+            {
+                if (debugClient.available())
+                {
+                    configData = debugClient.readStringUntil('\n');
+                    configData.trim();
+                    if (!configData.isEmpty())
                     {
-                        if (client.available())
-                        {
-                            configData = client.readStringUntil('\n');
-                            configData.trim();
-                            if (!configData.isEmpty())
-                            {
-                                log_i("Received Config Data");
-                                configUpdater(configData, ADC);
-                                log_i("Successfully updated ADC with new config data");
-                                client.write("Config Done");
-                                currentState = IDLE;
-                            }
-                            break;
-                        }
-                    }
-                    if (configData.isEmpty())
-                    {
-                        log_w("No config received within timeout interval");
+                        log_i("Received Config Data");
+                        configUpdater(configData, ADC);
+                        log_i("Successfully updated ADC with new config data");
+                        debugClient.write("Config Done");
                         currentState = IDLE;
                     }
                     break;
+                }
             }
-            previousState = currentState;
-        }
-        // close the connection:
-        client.stop();
-        Serial.println("\nClient Disconnected.");
-        numPacket = 0;
+            if (configData.isEmpty())
+            {
+                log_w("No config received within timeout interval");
+                currentState = IDLE;
+            }
+            break;
     }
+    previousState = currentState;
+
+    // cleanup
+
+    if (serverClient && !serverClient.connected())
+    {
+        serverClient.stop();
+        log_i("Data Disconnected");
+    }
+
+    if (debugClient && !debugClient.connected())
+    {
+        debugClient.stop();
+        log_i("Debug Disconnected");
+    };
 };
 
 void setupTimer()

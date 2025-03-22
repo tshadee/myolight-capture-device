@@ -152,7 +152,6 @@ class MYOLIGHTInterface(ctk.CTk):
         )
         self.config_button.pack(pady=2)
 
-
         #status updater
         self.status_label = ctk.CTkLabel(
             self, 
@@ -179,7 +178,8 @@ class MYOLIGHTInterface(ctk.CTk):
         self.status_queue = Queue()
         self.after(100, self.process_status_queue)
 
-        self.socket_connection = None
+        self.socket_data_connection = None
+        self.socket_debug_connection = None
 
     def write(self,message):
         #print statements to this textbox
@@ -197,11 +197,18 @@ class MYOLIGHTInterface(ctk.CTk):
         self.status_queue.put("Status: Connecting to MCU...")
         print("Status: Connecting to MCU...")
         try:
-            self.socket_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket_connection.settimeout(5) 
-            self.socket_connection.connect(('192.168.4.1', 666))
-            self.status_queue.put("Status: Connected to MCU at IP: 192.168.4.1 , Port: 666")
-            print("Status: Connected to MCU at IP: 192.168.4.1 , Port: 666")
+            self.socket_data_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket_data_connection.settimeout(5) 
+            self.socket_data_connection.connect(('192.168.4.1', 666))
+            print("[INFO] Data Port Connected (666)")
+
+            self.socket_debug_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket_debug_connection.settimeout(5) 
+            self.socket_debug_connection.connect(('192.168.4.1', 665))
+            print("[INFO] Debug Port Connected (665)")
+
+            self.status_queue.put("Status: Connected to MCU (Data: 666 , Debug: 665)")
+            print("Status: Connected to MCU (Data: 666 , Debug: 665)")
 
             self.connect_button.configure(state="disabled")
             self.disconnect_button.configure(state="normal")
@@ -215,16 +222,13 @@ class MYOLIGHTInterface(ctk.CTk):
             self.listener_thread.start()
 
         except Exception as e:
-            self.status_queue.put(f"Error: {e}")
-        # else:
-        #     self.status_queue.put("Status: Failed to connect to Wi-Fi.")
-        #     print("Status: Failed to connect to Wi-Fi.")
+            self.status_queue.put(f"[ERROR] Connection Failed: {e}")
 
     def passive_listen_mcu(self):
         while not self.stop_listening_event.is_set():
             try:
-                if self.socket_connection:
-                    message = self.socket_connection.recv(1024).decode('utf-8').strip()
+                if self.socket_debug_connection:
+                    message = self.socket_debug_connection.recv(1024).decode('utf-8').strip()
                     if message:
                         print(f"[MCU]: {message}")
             except socket.timeout:
@@ -233,72 +237,30 @@ class MYOLIGHTInterface(ctk.CTk):
                 print(f"Listener Error: {e}")
             break
 
-    def scan_wifi_network(self):
-        try:
-            result = subprocess.run(["netsh", "wlan", "show", "networks"], capture_output=True, text=True)
-        except Exception as e:
-            return f"Error: {e}"
-        
-    def connect_to_wifi(self,ssid,password):
-        try:
-            # Create a XML configuration file for the Wi-Fi profile
-            config = f"""<?xml version=\"1.0\"?>
-                        <WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
-                        <name>{ssid}</name>
-                        <SSIDConfig>
-                        <SSID>
-                        <name>{ssid}</name>
-                        </SSID>
-                        </SSIDConfig>
-                        <connectionType>ESS</connectionType>
-                        <connectionMode>auto</connectionMode>
-                        <MSM>
-                        <security>
-                        <authEncryption>
-                        <authentication>WPA2PSK</authentication>
-                        <encryption>AES</encryption>
-                        <useOneX>false</useOneX>
-                        </authEncryption>
-                        <sharedKey>
-                        <keyType>passPhrase</keyType>
-                        <protected>false</protected>
-                        <keyMaterial>{password}</keyMaterial>
-                        </sharedKey>
-                        </security>
-                        </MSM>
-                        </WLANProfile>"""
-            
-            with open(f"{ssid}.xml", "w") as file:
-                file.write(config)
-            
-            # Add the profile to the system
-            subprocess.run(["netsh", "wlan", "add", "profile", f"filename={ssid}.xml"], check=True)
-            
-            # Connect to the Wi-Fi network
-            subprocess.run(["netsh", "wlan", "connect", f"name={ssid}"], check=True)
-            
-            return f"Connected to {ssid}"
-        except subprocess.CalledProcessError as e:
-            return f"Error: {e}"
-
     def stop_connection(self):
         try:
             if self.collection_thread and self.collection_thread.is_alive():
                 self.stop_data_collection()
-            if self.socket_connection:
-                self.stop_listening_event.set()
-                self.socket_connection.close()
-                self.socket_connection = None
-                self.status_queue.put("Status: Disconnected from MCU.")
-                print("Status: Disconnected from MCU.")
-                self.socket_connection = None
 
-                self.connect_button.configure(state="normal")
-                self.disconnect_button.configure(state="disabled")
-                self.start_button.configure(state="disabled")
-                self.stop_button.configure(state="disabled")
-                self.analyse_button.configure(state="normal")
-                self.config_button.configure(state="disabled")
+            self.stop_listening_event.set()
+            self.stop_data_event.set()
+
+            if self.socket_data_connection:
+                self.socket_data_connection.close()
+                self.socket_data_connection = None
+            if self.socket_debug_connection:
+                self.socket_debug_connection.close()
+                self.socket_debug_connection = None
+
+            self.status_queue.put("Status: Disconnected from MCU.")
+            print("Status: Disconnected from MCU.")
+            self.connect_button.configure(state="normal")
+            self.disconnect_button.configure(state="disabled")
+            self.start_button.configure(state="disabled")
+            self.stop_button.configure(state="disabled")
+            self.analyse_button.configure(state="normal")
+
+            self.config_button.configure(state="disabled")
         except Exception as e:
             self.status_queue.put(f"Error: {e}")
             print(f"Error: {e}")
@@ -358,16 +320,16 @@ class MYOLIGHTInterface(ctk.CTk):
         self.status_queue.put("Status: Analysis Complete")
 
     def send_command(self, command: str):
-        if self.socket_connection:
+        if self.socket_debug_connection:
             try:
                 message = command.strip() + "\n"
-                self.socket_connection.sendall(message.encode('utf-8'))
+                self.socket_debug_connection.sendall(message.encode('utf-8'))
                 print(f"Sent command: {command}")
             except Exception as e:
                 print(f"Error sending command: {e}")
 
     def send_config(self):
-        if self.socket_connection:
+        if self.socket_debug_connection:
             try:
                 self.send_command("CONFIG")
                 message=",".join(map(str, configuration_arr)) + "\n"
@@ -399,7 +361,7 @@ class MYOLIGHTInterface(ctk.CTk):
         BUFFER_SIZE = 66
         CSV_FILE = "data_log.csv"
 
-        if self.socket_connection:
+        if self.socket_data_connection:
             try:
                 with open(CSV_FILE, mode='w', newline='') as file:
                     writer = csv.writer(file)
@@ -409,7 +371,7 @@ class MYOLIGHTInterface(ctk.CTk):
                         data = b''
                         while len(data) < BUFFER_SIZE:
                             try:
-                                packet = self.socket_connection.recv(BUFFER_SIZE - len(data))
+                                packet = self.socket_data_connection.recv(BUFFER_SIZE - len(data))
                                 if not packet:
                                     break
                                 data += packet
@@ -500,7 +462,6 @@ def prune_data():
     print(f"[DONE] Pruned data written to {OUTPUT_FILE}.")
 
 def analyse_data():
-    #TODO: change this into something user can input
     CSV_FILE = "data_log_pruned.csv"
     time_step = 1/sample_rate
 
