@@ -181,7 +181,6 @@ class MYOLIGHTInterface(ctk.CTk):
 
         self.socket_connection = None
         self.active_data_thread = None
-        # self.socket_debug_connection = None
 
     def write(self,message):
         #print statements to this textbox
@@ -219,11 +218,12 @@ class MYOLIGHTInterface(ctk.CTk):
         except Exception as e:
             self.status_queue.put(f"[ERROR] start_connection: {e}")
 
+
     def stop_connection(self):
         try:
             if self.collection_thread and self.collection_thread.is_alive():
                 self.stop_data_collection()
-
+                
             if self.socket_connection:
                 self.stop_active_data_thread_event.set()
                 self.socket_connection.close()
@@ -231,6 +231,7 @@ class MYOLIGHTInterface(ctk.CTk):
 
             self.status_queue.put("[CONN] Disconnected from MCU")
             print("[CONN] Disconnected from MCU")
+
             self.connect_button.configure(state="normal")
             self.disconnect_button.configure(state="disabled")
             self.start_button.configure(state="disabled")
@@ -294,16 +295,17 @@ class MYOLIGHTInterface(ctk.CTk):
         self.status_queue.put("Status: Analysis Complete")
 
     def send_command(self, command: str):
-        if self.socket_connection:
+        if self.socket_debug_connection:
             try:
                 message = command.strip() + "\n"
                 self.socket_connection.sendall(message.encode('utf-8'))
                 print(f"[INFO] Sent command: {command}")
+    
             except Exception as e:
                 print(f"Error sending command: {e}")
 
     def send_config(self):
-        if self.socket_connection:
+        if self.socket_debug_connection:
             try:
                 self.send_command("CONFIG")
                 message=",".join(map(str, configuration_arr))

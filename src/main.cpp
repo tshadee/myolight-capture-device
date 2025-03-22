@@ -47,9 +47,9 @@ struct Config
 // Global Variables
 volatile bool sampleReady = false;  // Flag set by the ISR
 WiFiServer server(WIFI_PORT);       // port DOOM
-// WiFiServer debug(WIFI_DEBUG);       // port DOOM-1
-// WiFiClient serverClient;            // all data go to this
-// WiFiClient debugClient;             // everything else
+WiFiServer debug(WIFI_DEBUG);       // port DOOM-1
+WiFiClient serverClient;            // all data go to this
+WiFiClient debugClient;             // everything else
 SPIClass* vspi = NULL;
 ADS8686S_SPI_Handler* ADC = NULL;
 SysState currentState = IDLE;
@@ -114,16 +114,17 @@ void setup()
     };
     IPAddress myIP = WiFi.softAPIP();  // set IP
     server.begin();                    // start TCP server
-    // debug.begin();
+    debug.begin();
     log_i("SAP CFG GOOD");
     Serial.print("AP IP ADDR: ");
     Serial.println(myIP);
 };
 
+// update this to match client and debug channels from python (666/665)
+
 void loop()
 {
-    WiFiClient client = server.accept();  // listen for incoming clients
-    if (client)
+    if (!serverClient || !serverClient.connected())
     {
         log_i("Client Connected");
         sendText(client, "Client Connected");
@@ -167,11 +168,36 @@ void loop()
                 };
             };
 
-            switch (currentState)
+    if (!debugClient || !debugClient.connected())
+    {
+        WiFiClient temp = debug.accept();
+        if (temp)
+        {
+            debugClient = temp;
+            debugClient.write("Debug Connected");
+            log_i("Debug Connected");
+            log_i("Client connected on port: %d", temp.localPort());
+            log_i("Remote port: %d", temp.remotePort());
+        }
+    };
+
+    if (!serverClient || !serverClient.connected() || !debugClient || !debugClient.connected())
+    {
+        return;  // Skip the rest until both are connected
+    }
+
+    // commands from cilent
+
+    if (debugClient.available())
+    {
+        String command = debugClient.readStringUntil('\n');
+        command.trim();
+        if (command == "START")
+        {
+            log_i("START GOT");
+            debugClient.write("START");
+            switch (previousState)
             {
-                case IDLE:
-                    numPacket = 0;
-                    break;
                 case SENDING_DATA:
                     if (sampleReady)  // polling managed by ISR
                     {
@@ -210,10 +236,14 @@ void loop()
                     }
                     if (configData.isEmpty())
                     {
-                        log_w("No config received within timeout interval");
+                        log_i("Received Config Data");
+                        configUpdater(configData, ADC);
+                        log_i("Successfully updated ADC with new config data");
+                        debugClient.write("Config Done");
                         currentState = IDLE;
                     }
                     break;
+                }
             }
             previousState = currentState;
         }
@@ -222,6 +252,21 @@ void loop()
         log_i("Client Disconnected");
         numPacket = 0;
     }
+    previousState = currentState;
+
+    // cleanup
+
+    if (serverClient && !serverClient.connected())
+    {
+        serverClient.stop();
+        log_i("Data Disconnected");
+    }
+
+    if (debugClient && !debugClient.connected())
+    {
+        debugClient.stop();
+        log_i("Debug Disconnected");
+    };
 };
 
 void setupTimer()
