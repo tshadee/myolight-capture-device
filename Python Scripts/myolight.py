@@ -20,7 +20,7 @@ class MYOLIGHTInterface(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("MYOLIGHT")
-        self.geometry("400x500")
+        self.geometry("400x600")
         self.resizable(False, False)
 
         #frame for buttons
@@ -164,10 +164,17 @@ class MYOLIGHTInterface(ctk.CTk):
         self.console_textbox = ctk.CTkTextbox(
             self,
             width=400,
-            height=200,
+            height=330,
             font=("Monaco", 12))
         self.console_textbox.grid(row=2,column=0,columnspan=2,sticky="s")
         self.console_textbox.configure(state="disabled") #yall dont interact with this textbox
+
+        self.console_textbox.tag_config("INFO", foreground="#00AA00")   # Green
+        self.console_textbox.tag_config("ERROR", foreground="#FF3333")  # Red
+        self.console_textbox.tag_config("ECHO", foreground="#00AAAA")   # Cyan
+        self.console_textbox.tag_config("WARN", foreground="#FF6600")   # Orange
+        self.console_textbox.tag_config("CONN", foreground="#5555FF")   # Blue
+        self.console_textbox.tag_config("PRCS", foreground="#f828ff")   # Yellow
 
         #sysout to this ctk window instead of console
         sys.stdout = self
@@ -175,7 +182,7 @@ class MYOLIGHTInterface(ctk.CTk):
         #threading
         self.stop_active_data_thread_event = threading.Event()
         # self.stop_data_event = threading.Event()
-        self.collection_thread = None
+        # self.collection_thread = None
         self.status_queue = Queue()
         self.after(100, self.process_status_queue)
 
@@ -186,7 +193,21 @@ class MYOLIGHTInterface(ctk.CTk):
     def write(self,message):
         #print statements to this textbox
         self.console_textbox.configure(state="normal")  # Enable editing
-        self.console_textbox.insert("end", message)  # Insert the message
+
+        if message.startswith("[") and "]" in message:
+            tag_end = message.find("]") + 1
+            tag_text = message[:tag_end]
+            rest_text = message[tag_end:]
+
+            tag_name = tag_text.strip("[]")  # e.g., "ERROR"
+
+            # Insert tag part with color
+            self.console_textbox.insert("end", tag_text, tag_name)
+            self.console_textbox.insert("end", rest_text)
+        else:
+        # No tag found, print normally
+            self.console_textbox.insert("end", message)
+
         self.console_textbox.configure(state="disabled")  # Disable editing
         self.console_textbox.see("end")  # Auto-scroll to the bottom
 
@@ -221,11 +242,12 @@ class MYOLIGHTInterface(ctk.CTk):
 
     def stop_connection(self):
         try:
-            if self.collection_thread and self.collection_thread.is_alive():
-                self.stop_data_collection()
+            self.stop_active_data_thread_event.set()
+
+            # if self.collection_thread and self.collection_thread.is_alive():
+            #     self.stop_data_collection()
 
             if self.socket_connection:
-                self.stop_active_data_thread_event.set()
                 self.socket_connection.close()
                 self.socket_connection = None
 
@@ -262,8 +284,6 @@ class MYOLIGHTInterface(ctk.CTk):
     def stop_data_collection(self):
         self.send_command("STOP")
         self.status_queue.put("Status: Stopping...")
-        self.after(100, self.check_collection_thread)
-
         self.connect_button.configure(state="disabled")
         self.disconnect_button.configure(state="normal")
         self.start_button.configure(state="normal")
@@ -277,18 +297,18 @@ class MYOLIGHTInterface(ctk.CTk):
         self.stop_connection()
         super().destroy()
 
-    def check_collection_thread(self):
-        if self.collection_thread.is_alive():
-            self.after(100, self.check_collection_thread)
-        else:
-            self.status_queue.put("Status: Stopped")
-            self.start_button.configure(state="normal")
-            self.stop_button.configure(state="disabled")
+    # def check_collection_thread(self):
+    #     if self.collection_thread.is_alive():
+    #         self.after(100, self.check_collection_thread)
+    #     else:
+    #         self.status_queue.put("Status: Stopped")
+    #         self.start_button.configure(state="normal")
+    #         self.stop_button.configure(state="disabled")
 
     def start_analysis(self):
         #main thread
         prune_data()
-        print("[DONE] Pruning Complete")
+        print("[INFO] Pruning Complete")
         self.status_queue.put("Status: Analysing Data...")
         analyse_data()
         self.status_queue.put("Status: Analysis Complete")
