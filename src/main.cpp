@@ -67,18 +67,12 @@ void defaultOperation();
 void singleColumn(int col);
 void sendText(WiFiClient& client, const String& text);
 void sendData(WiFiClient& client, const uint8_t* data);
-
 void IRAM_ATTR onTimer() { sampleReady = true; };
 
 void setup()
 {
     pinSetup();
     esp_log_level_set("*", ESP_LOG_INFO);
-    delay(5000);
-    if (Serial.available())
-    {
-        Serial.begin(115200);
-    }
 
     // FSPI Initialisation
     try
@@ -112,8 +106,6 @@ void setup()
     IPAddress myIP = WiFi.softAPIP();  // set IP
     server.begin();                    // start TCP server
     log_i("SAP CFG GOOD");
-    Serial.print("AP IP ADDR: ");
-    Serial.println(myIP);
 };
 
 void loop()
@@ -132,7 +124,7 @@ void loop()
                 // good ol statemachine
                 if (command == "START")
                 {
-                    log_i("START GOT");
+                    log_i("START");
                     sendText(client, "Starting");
                     switch (previousState)
                     {
@@ -150,14 +142,14 @@ void loop()
                 }
                 else if (command == "STOP")
                 {
-                    log_i("STOP GOT");
+                    log_i("STOP");
                     sendText(client, "Stopping");
                     currentState = IDLE;
                     stopTimer();
                 }
                 else if (command == "CONFIG")
                 {
-                    log_i("CONFIG GOT");
+                    log_i("CONFIG");
                     sendText(client, "Configuration");
                     currentState = CONFIGURING;
                 };
@@ -198,7 +190,7 @@ void loop()
                                 log_i("Received Config Data");
                                 configUpdater(configData, ADC);
                                 log_i("Successfully updated ADC with new config data");
-                                sendText(client, "ADC Configured");
+                                sendText(client, "System Configured");
                                 currentState = IDLE;
                             }
                             break;
