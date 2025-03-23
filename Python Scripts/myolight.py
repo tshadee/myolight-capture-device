@@ -23,6 +23,12 @@ class MYOLIGHTInterface(ctk.CTk):
         self.geometry("400x600")
         self.resizable(False, False)
 
+        #global internal variables (for real time)
+        self.saturation_thres = 32000 #should be updatable via input range selection. 16-bit signed sat limit
+        self.saturation_window = 3 #seconds (should be able to be changed, or not!)
+        self.saturation_counters = [0]*28
+        self.saturation_samples = sample_rate*self.saturation_window
+
         #frame for buttons
         self.button_frame = ctk.CTkFrame(self,fg_color="transparent")
         self.button_frame.grid(row=0,column=0,sticky="nw")
@@ -92,7 +98,7 @@ class MYOLIGHTInterface(ctk.CTk):
         self.analyse_button.pack(pady=2)
 
         self.control_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.control_frame.grid(row=0,column=1,sticky="ne")
+        self.control_frame.grid(row=0,column=1,stick="ne")
 
         self.sample_label = ctk.CTkLabel(
             self.control_frame,
@@ -164,10 +170,23 @@ class MYOLIGHTInterface(ctk.CTk):
         self.console_textbox = ctk.CTkTextbox(
             self,
             width=400,
-            height=330,
+            height=230,
             font=("Monaco", 12))
         self.console_textbox.grid(row=2,column=0,columnspan=2,sticky="s")
         self.console_textbox.configure(state="disabled") #yall dont interact with this textbox
+
+        #amplifier saturation real time check for each channel (use to check bad contact)
+        self.grid_frame = ctk.CTkFrame(self)
+        self.grid_frame.grid(row=3,column=0,columnspan=2)
+
+        self.channel_display = []
+        for row in range(4):
+            row_widgets = []
+            for col in range(7):
+                indicator = ctk.CTkLabel(self.grid_frame,width=20,height=20,text="",corner_radius=8,fg_color="green")
+                indicator.grid(row=row,column=col,padx=2,pady=2)
+                row_widgets.append(indicator)
+            self.channel_display.append(row_widgets)
 
         self.console_textbox.tag_config("INFO", foreground="#00AA00")   # Green
         self.console_textbox.tag_config("ERROR", foreground="#FF3333")  # Red
@@ -239,13 +258,11 @@ class MYOLIGHTInterface(ctk.CTk):
 
         except Exception as e:
             self.status_queue.put(f"[ERROR] start_connection: {e}")
+            print(f"[ERROR] start_connection: {e}")
 
     def stop_connection(self):
         try:
             self.stop_active_data_thread_event.set()
-
-            # if self.collection_thread and self.collection_thread.is_alive():
-            #     self.stop_data_collection()
 
             if self.socket_connection:
                 self.socket_connection.close()
@@ -296,14 +313,6 @@ class MYOLIGHTInterface(ctk.CTk):
         self.stop_data_collection()
         self.stop_connection()
         super().destroy()
-
-    # def check_collection_thread(self):
-    #     if self.collection_thread.is_alive():
-    #         self.after(100, self.check_collection_thread)
-    #     else:
-    #         self.status_queue.put("Status: Stopped")
-    #         self.start_button.configure(state="normal")
-    #         self.stop_button.configure(state="disabled")
 
     def start_analysis(self):
         #main thread
@@ -372,6 +381,7 @@ class MYOLIGHTInterface(ctk.CTk):
 
             if index == 0:
                 sample_rate = int(choice)
+                self.saturation_samples = sample_rate*self.saturation_window
                 print(f"[INFO] Updated sample_rate -> {sample_rate}")
             elif index == 1:
                 sample_range = int(choice)
