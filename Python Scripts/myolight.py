@@ -28,6 +28,11 @@ class MYOLIGHTInterface(ctk.CTk):
         self.saturation_window = 3 #seconds (should be able to be changed, or not!)
         self.saturation_counters = [0]*28
         self.saturation_samples = sample_rate*self.saturation_window
+        self.saturation_flags = [False]*28
+
+        self.fft_window = 1 #change as necessary. some computers might not be able to handle 28000 point rolling FFT
+        self.fft_buffer = [[] for _ in range(28)] #28 channels
+        self.fft_sample_count = sample_rate*self.fft_window 
 
         #frame for buttons
         self.button_frame = ctk.CTkFrame(self,fg_color="transparent")
@@ -385,7 +390,9 @@ class MYOLIGHTInterface(ctk.CTk):
                 print(f"[INFO] Updated sample_rate -> {sample_rate}")
             elif index == 1:
                 sample_range = int(choice)
+                self.saturation_thres = min(int((2**15 - 1) * (3.25/sample_range)),32767)
                 print(f"[INFO] Updated sample_range -> {sample_range}")
+                print(f"[INFO] Updated saturation_thres -> {self.saturation_thres}")
 
     def run_data_thread(self):
         CSV_FILE = "data_log.csv"
@@ -408,6 +415,25 @@ class MYOLIGHTInterface(ctk.CTk):
         except Exception as e:
             print(f"[ERROR] CSV Writer: {e}")
 
+    def update_saturation_flags(self, channel_values): #TODO: UPDATE GUI. DO NOT USE CTKINTER BECAUSE ITS TOO SLOW
+        threshold = self.saturation_thres
+        for i in range(28):
+            if abs(channel_values[i]) >= threshold:
+                self.saturation_counters[i] += 1
+            else:
+                self.saturation_counters[i] = 0
+            
+            if self.saturation_counters[i] >= self.saturation_samples:
+                self.saturation_flags[i] = True
+            else:
+                self.saturation_flags[i] = False
+
+        for i in range(28):
+            row = (27-i) // 7
+            column = i % 7
+            colour = "red" if self.saturation_flags[i] else "green"
+            self.channel_display[row][column].configure(fg_color=colour)
+
     def parse_data(self,payload,csvwriter): #this function needs to be rewritten alongside the active data thread
         try:
             if len(payload) == 66:
@@ -417,8 +443,28 @@ class MYOLIGHTInterface(ctk.CTk):
                 CH4 = struct.unpack('<8h', payload[48:64])
                 packet_number = struct.unpack('<H', payload[64:66])[0]
                 csvwriter.writerow([CH1, CH2, CH3, CH4, packet_number])
+                
+                #process data further here for live monitoring
+                index_map = [1,3,5,7,0,2,4,6]
+
+                t_ch1 = [CH1[i] for i in index_map[:-1]]
+                t_ch2 = [CH2[i] for i in index_map[:-1]]
+                t_ch3 = [CH3[i] for i in index_map[:-1]]
+                t_ch4 = [CH4[i] for i in index_map[:-1]]
+
+                flattened_channels = t_ch1 + t_ch2 + t_ch3 + t_ch4
+                
+                #FIXME: THIS DOES NOT WORK. THIS IS TOO SLOW FOR THE PROGRAM!!!
+                # self.update_saturation_flags(flattened_channels)
+
+                for i, value in enumerate(flattened_channels):
+                    self.fft_buffer[i].append(value)
+                    if len(self.fft_buffer[i]) > self.fft_sample_count:
+                        self.fft_buffer[i].pop(0)
+
         except Exception as e:
             self.status_queue.put(f"[ERROR] parse_data: {e}")
+            print(f"[ERROR] parse_data: {e}")
 
 #Data Pruning
 def prune_data():
