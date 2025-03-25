@@ -7,6 +7,7 @@ from scipy.interpolate import interp1d
 from queue import Queue
 from PyQt6.QtWidgets import QApplication
 from myolight_pyqt_fft import LiveFFTWindow
+from collections import deque
 
 #Set theme and colour options
 ctk.set_appearance_mode("light")
@@ -32,8 +33,8 @@ class MYOLIGHTInterface(ctk.CTk):
         self.saturation_samples = sample_rate*self.saturation_window
         self.saturation_flags = [False]*28
 
-        self.fft_window = 1 #change as necessary. some computers might not be able to handle 28000 point rolling FFT
-        self.fft_buffer = [[] for _ in range(28)] #28 channels
+        self.fft_window = 0.5 #change as necessary. some computers might not be able to handle 28000 point rolling FFT
+        self.fft_buffer = [deque(maxlen=500) for _ in range(28)] #28 channels
         self.fft_sample_count = 500
 
         #frame for buttons
@@ -487,9 +488,7 @@ class MYOLIGHTInterface(ctk.CTk):
 
                 for i, value in enumerate(flattened_channels):
                     self.fft_buffer[i].append(value)
-                    if len(self.fft_buffer[i]) > self.fft_sample_count:
-                        self.fft_buffer[i].pop(0)
-                
+
                 # print("[INFO] Channel 0 buffer length:", len(self.fft_buffer[0]))
 
         except Exception as e:
