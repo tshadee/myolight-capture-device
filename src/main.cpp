@@ -171,7 +171,7 @@ void loop()
                         const uint16_t* dataReceived = ADC->getReceiveBuffer();
                         sendData(client, (uint8_t*)dataReceived);
                         numPacket++;
-                        if (numPacket % 250 == 0)
+                        if (numPacket % 1000 == 0)
                         {
                             log_i("%d", numPacket);
                         };

@@ -34,7 +34,7 @@ class MYOLIGHTInterface(ctk.CTk):
 
         self.fft_window = 1 #change as necessary. some computers might not be able to handle 28000 point rolling FFT
         self.fft_buffer = [[] for _ in range(28)] #28 channels
-        self.fft_sample_count = 1000
+        self.fft_sample_count = 500
 
         #frame for buttons
         self.button_frame = ctk.CTkFrame(self,fg_color="transparent")
@@ -402,7 +402,7 @@ class MYOLIGHTInterface(ctk.CTk):
             elif index == 1:
                 sample_range = int(choice)
                 self.saturation_thres = min(int((2**15 - 1) * (3.25/sample_range)),32767)
-                self.fft_sample_count = sample_rate*self.fft_window
+                self.fft_sample_count = max(sample_rate*self.fft_window,500)
                 print(f"[INFO] Updated sample_range -> {sample_range}")
                 print(f"[INFO] Updated saturation_thres -> {self.saturation_thres}")
 
