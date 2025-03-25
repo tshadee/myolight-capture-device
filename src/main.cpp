@@ -158,6 +158,7 @@ void loop()
             switch (currentState)
             {
                 case IDLE:
+                    stopTimer();
                     numPacket = 0;
                     break;
                 case SENDING_DATA:
@@ -170,7 +171,7 @@ void loop()
                         const uint16_t* dataReceived = ADC->getReceiveBuffer();
                         sendData(client, (uint8_t*)dataReceived);
                         numPacket++;
-                        if (numPacket % 100 == 0)
+                        if (numPacket % 250 == 0)
                         {
                             log_i("%d", numPacket);
                         };
@@ -208,6 +209,8 @@ void loop()
         // close the connection
         client.stop();
         log_i("Client Disconnected");
+        currentState = IDLE;
+        stopTimer();
         numPacket = 0;
     }
 };

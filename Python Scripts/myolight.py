@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import select
 from scipy.interpolate import interp1d
 from queue import Queue
+from PyQt6.QtWidgets import QApplication
+from myolight_pyqt_fft import LiveFFTWindow
 
 #Set theme and colour options
 ctk.set_appearance_mode("light")
@@ -32,7 +34,7 @@ class MYOLIGHTInterface(ctk.CTk):
 
         self.fft_window = 1 #change as necessary. some computers might not be able to handle 28000 point rolling FFT
         self.fft_buffer = [[] for _ in range(28)] #28 channels
-        self.fft_sample_count = sample_rate*self.fft_window 
+        self.fft_sample_count = 1000
 
         #frame for buttons
         self.button_frame = ctk.CTkFrame(self,fg_color="transparent")
@@ -200,6 +202,9 @@ class MYOLIGHTInterface(ctk.CTk):
         self.console_textbox.tag_config("CONN", foreground="#5555FF")   # Blue
         self.console_textbox.tag_config("PRCS", foreground="#f828ff")   # Yellow
 
+        self.sample_combo.set("1000")
+        self.update_config(0,"1000")
+
         #sysout to this ctk window instead of console
         sys.stdout = self
 
@@ -296,12 +301,18 @@ class MYOLIGHTInterface(ctk.CTk):
         self.after(100, self.process_status_queue)
 
     def start_data_collection(self):
+        if sample_rate == 0:
+            print("[ERROR] Sample rate not set.")
+            return
+        
         self.send_command("START")
         self.status_queue.put("Status: Collecting Data...")
         self.start_button.configure(state="disabled")
         self.stop_button.configure(state="normal")
         self.analyse_button.configure(state="disabled")
         self.config_button.configure(state="disabled")
+
+        self.launch_fft_viewer()
 
     def stop_data_collection(self):
         self.send_command("STOP")
@@ -391,6 +402,7 @@ class MYOLIGHTInterface(ctk.CTk):
             elif index == 1:
                 sample_range = int(choice)
                 self.saturation_thres = min(int((2**15 - 1) * (3.25/sample_range)),32767)
+                self.fft_sample_count = sample_rate*self.fft_window
                 print(f"[INFO] Updated sample_range -> {sample_range}")
                 print(f"[INFO] Updated saturation_thres -> {self.saturation_thres}")
 
@@ -434,6 +446,18 @@ class MYOLIGHTInterface(ctk.CTk):
             colour = "red" if self.saturation_flags[i] else "green"
             self.channel_display[row][column].configure(fg_color=colour)
 
+    def launch_fft_viewer(self):
+        self.qt_app = QApplication([])
+        self.fft_window = LiveFFTWindow(
+            fft_buffer_getter=lambda: self.fft_buffer,
+            sample_rate_getter=lambda: sample_rate,
+            window_seconds=self.fft_window
+        )
+        self.fft_window.show()
+
+        # Run Qt loop in background thread so it doesn't block tkinter
+        threading.Thread(target=self.qt_app.exec, daemon=True).start()
+
     def parse_data(self,payload,csvwriter): #this function needs to be rewritten alongside the active data thread
         try:
             if len(payload) == 66:
@@ -441,8 +465,8 @@ class MYOLIGHTInterface(ctk.CTk):
                 CH2 = struct.unpack('<8h', payload[16:32])
                 CH3 = struct.unpack('<8h', payload[32:48])
                 CH4 = struct.unpack('<8h', payload[48:64])
-                packet_number = struct.unpack('<H', payload[64:66])[0]
-                csvwriter.writerow([CH1, CH2, CH3, CH4, packet_number])
+                # packet_number = struct.unpack('<H', payload[64:66])[0]
+                # csvwriter.writerow([CH1, CH2, CH3, CH4, packet_number])
                 
                 #process data further here for live monitoring
                 index_map = [1,3,5,7,0,2,4,6]
@@ -453,6 +477,10 @@ class MYOLIGHTInterface(ctk.CTk):
                 t_ch4 = [CH4[i] for i in index_map[:-1]]
 
                 flattened_channels = t_ch1 + t_ch2 + t_ch3 + t_ch4
+
+                if not hasattr(self, 'fft_buffer') or len(self.fft_buffer) != 28:
+                    print("[ERROR] fft_buffer is not correctly initialized:", self.fft_buffer)
+
                 
                 #FIXME: THIS DOES NOT WORK. THIS IS TOO SLOW FOR THE PROGRAM!!!
                 # self.update_saturation_flags(flattened_channels)
@@ -461,6 +489,8 @@ class MYOLIGHTInterface(ctk.CTk):
                     self.fft_buffer[i].append(value)
                     if len(self.fft_buffer[i]) > self.fft_sample_count:
                         self.fft_buffer[i].pop(0)
+                
+                # print("[INFO] Channel 0 buffer length:", len(self.fft_buffer[0]))
 
         except Exception as e:
             self.status_queue.put(f"[ERROR] parse_data: {e}")
