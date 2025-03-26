@@ -3,6 +3,8 @@ from PyQt6.QtCore import QTimer
 import pyqtgraph as pg
 import numpy as np
 from scipy.signal import lfilter, iirnotch,filtfilt
+from scipy.signal import firwin
+from numba import njit
 
 class LiveFFTWindow(QWidget):
     def __init__(self, fft_buffer_getter, sample_rate_getter, window_seconds=1):
@@ -18,6 +20,7 @@ class LiveFFTWindow(QWidget):
         self.sample_count = int(self.sample_rate * self.window_seconds)  # Make sure sample_rate is set!
         self.time_step = 1 / self.sample_rate
         self.freq_axis = np.fft.rfftfreq(self.sample_count, d=self.time_step)
+        self.low_pass = low_pass_filter(self.sample_rate)
 
         self.layout = QGridLayout()
         self.setLayout(self.layout)
@@ -39,7 +42,7 @@ class LiveFFTWindow(QWidget):
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_fft)
-        self.timer.start(250)  # ~2Hz
+        self.timer.start(200)  # ~5Hz
 
     def update_fft(self):
         if self.sample_rate == 0:
@@ -57,41 +60,43 @@ class LiveFFTWindow(QWidget):
                 continue
 
             data = np.array(data)
-
-            data = comb_notch_filter(data, self.sample_rate)
+            data = apply_lowpass(data,self.low_pass)
+            data = comb_notch_filter_numba(data, self.sample_rate)
 
             fft_result = np.fft.rfft(data) / float(self.sample_count)
             fft_mag = 2 * np.abs(fft_result)
             fft_mag[0] = 0
             fft_mag[self.freq_axis < 20] = 0
-            fft_mag = fft_mag[::2]
+            fft_mag = fft_mag[::3]
 
-            self.curves[i].setData(self.freq_axis[::2], fft_mag)
+            self.curves[i].setData(self.freq_axis[::3], fft_mag)
 
-def comb_notch_filter(data, fs, f0=50, num_harmonics=5):
-    N = int(fs / f0)  # spacing in samples
-    b = np.ones(1)  # start with no filter
-    
+def low_pass_filter(fs,cutoff=490,numtaps=51):
+    return firwin(numtaps,cutoff,fs=fs)
+
+def apply_lowpass(data,b):
+    return lfilter(b,[1.0],data)
+
+@njit
+def comb_notch_filter_numba(data, fs, f0=50, num_harmonics=5):
+    N = int(fs / f0)
+    max_delay = num_harmonics * N
+    b = np.zeros(max_delay + 1)
+    b[0] = 1.0
+
     for k in range(1, num_harmonics + 1):
-        delay = k * N
-        # Construct simple notch: current sample - delayed sample
-        h = np.zeros(delay + 1)
-        h[0] = 1
-        h[-1] = -1
-        b = np.convolve(b, h)
+        b[k * N] -= 1.0
 
-    # Normalize to avoid gain explosion
-    b /= np.sum(np.abs(b))
+    b_sum = np.sum(np.abs(b))
+    if b_sum != 0:
+        b /= b_sum
 
-    # Apply filter
-    filtered_data = lfilter(b, [1], data)
-    return filtered_data
+    # Manual convolution (faster for short filters with Numba)
+    output = np.zeros_like(data)
+    for n in range(len(data)):
+        for k in range(len(b)):
+            if n - k >= 0:
+                output[n] += b[k] * data[n - k]
+    return output
 
-
-def apply_notch_filters(data, fs, freqs=[50, 100, 150, 200, 250], quality=30):
-        
-        for f0 in freqs:
-            b, a = iirnotch(f0, quality, fs)
-            data = filtfilt(b, a, data)
-        return data
         
