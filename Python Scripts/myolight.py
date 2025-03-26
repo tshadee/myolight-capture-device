@@ -1,5 +1,5 @@
 import customtkinter as ctk
-import socket, struct, threading, csv, sys, subprocess, ast
+import socket, struct, threading, csv, sys, ast
 import numpy as np
 import matplotlib.pyplot as plt
 import select
@@ -203,9 +203,6 @@ class MYOLIGHTInterface(ctk.CTk):
         self.console_textbox.tag_config("CONN", foreground="#5555FF")   # Blue
         self.console_textbox.tag_config("PRCS", foreground="#f828ff")   # Yellow
 
-        self.sample_combo.set("1000")
-        self.update_config(0,"1000")
-
         #sysout to this ctk window instead of console
         sys.stdout = self
 
@@ -219,6 +216,11 @@ class MYOLIGHTInterface(ctk.CTk):
         self.socket_connection = None
         self.active_data_thread = None
         # self.socket_debug_connection = None
+
+        self.sample_combo.set("1000")
+        self.range_combo.set("4")
+        self.update_config(0,"1000")
+        self.update_config(1,"4")
 
     def write(self,message):
         #print statements to this textbox
