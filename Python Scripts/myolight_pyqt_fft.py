@@ -21,6 +21,7 @@ class LiveFFTWindow(QWidget):
         self.time_step = 1 / self.sample_rate
         self.freq_axis = np.fft.rfftfreq(self.sample_count, d=self.time_step)
         self.low_pass = low_pass_filter(self.sample_rate)
+        self.high_pass = high_pass_filter(self.sample_rate)
 
         self.layout = QGridLayout()
         self.setLayout(self.layout)
@@ -60,6 +61,7 @@ class LiveFFTWindow(QWidget):
                 continue
 
             data = np.array(data)
+            data = apply_highpass(data,self.high_pass)
             data = apply_lowpass(data,self.low_pass)
             data = comb_notch_filter_numba(data, self.sample_rate)
 
@@ -70,6 +72,13 @@ class LiveFFTWindow(QWidget):
             fft_mag = fft_mag[::3]
 
             self.curves[i].setData(self.freq_axis[::3], fft_mag)
+
+
+def high_pass_filter(fs,cutoff=10,numtaps=51):
+    return firwin(numtaps,cutoff,pass_zero=0,fs=fs)
+
+def apply_highpass(data,b):
+    return lfilter(b,[1.0],data)
 
 def low_pass_filter(fs,cutoff=490,numtaps=51):
     return firwin(numtaps,cutoff,fs=fs)
