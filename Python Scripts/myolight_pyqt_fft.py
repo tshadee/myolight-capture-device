@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import QWidget, QApplication, QGridLayout
 from PyQt6.QtCore import QTimer
 import pyqtgraph as pg
 import numpy as np
-from scipy.signal import lfilter, iirnotch,filtfilt
+from scipy.signal import lfilter
 from scipy.signal import firwin
 from numba import njit
 
@@ -33,7 +33,7 @@ class LiveFFTWindow(QWidget):
 
         for i in range(28):
             plot = pg.PlotWidget()
-            plot.setYRange(0, 500)
+            plot.setYRange(0, 1000)
             plot.setXRange(20, 250)
             plot.setTitle(f"Ch {i+1}")
             curve = plot.plot(pen='g')
@@ -74,13 +74,13 @@ class LiveFFTWindow(QWidget):
             self.curves[i].setData(self.freq_axis[::3], fft_mag)
 
 
-def high_pass_filter(fs,cutoff=10,numtaps=51):
+def high_pass_filter(fs,cutoff=15,numtaps=51):
     return firwin(numtaps,cutoff,pass_zero=0,fs=fs)
 
 def apply_highpass(data,b):
     return lfilter(b,[1.0],data)
 
-def low_pass_filter(fs,cutoff=490,numtaps=51):
+def low_pass_filter(fs,cutoff=400,numtaps=51):
     return firwin(numtaps,cutoff,fs=fs)
 
 def apply_lowpass(data,b):
