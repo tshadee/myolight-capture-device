@@ -410,25 +410,25 @@ class MYOLIGHTInterface(ctk.CTk):
                 print(f"[INFO] Updated saturation_thres -> {self.saturation_thres}")
 
     def run_data_thread(self):
-        # CSV_FILE = "data_log.csv"
-        # try:
-            # with open(CSV_FILE,mode='w',newline='') as file:
-            #     writer = csv.writer(file)
-            #     writer.writerow(['CH1', 'CH2', 'CH3', 'CH4', 'PacketNumber'])
-        while not self.stop_active_data_thread_event.is_set():
-            try:
-                if(self.socket_connection):
-                    msg_type,payload = self.read_incoming(self.socket_connection)
-                    if msg_type == 1:
-                        print("[ECHO]",payload.decode('utf-8'))
-                    elif msg_type == 2:
-                        self.parse_data(payload,writer)
-                    elif msg_type is not None:
-                        print(f"[WARN] Unknown message type: {msg_type}")
-            except Exception as e:
-                print(f"[ERROR] Active Data Thread: {e}")
-        # except Exception as e:
-        #     print(f"[ERROR] CSV Writer: {e}")
+        CSV_FILE = "data_log.csv"
+        try:
+            with open(CSV_FILE,mode='w',newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow(['CH1', 'CH2', 'CH3', 'CH4', 'PacketNumber'])
+            while not self.stop_active_data_thread_event.is_set():
+                try:
+                    if(self.socket_connection):
+                        msg_type,payload = self.read_incoming(self.socket_connection)
+                        if msg_type == 1:
+                            print("[ECHO]",payload.decode('utf-8'))
+                        elif msg_type == 2:
+                            self.parse_data(payload,writer)
+                        elif msg_type is not None:
+                            print(f"[WARN] Unknown message type: {msg_type}")
+                except Exception as e:
+                    print(f"[ERROR] Active Data Thread: {e}")
+        except Exception as e:
+            print(f"[ERROR] CSV Writer: {e}")
 
     def update_saturation_flags(self, channel_values): #TODO: UPDATE GUI. DO NOT USE CTKINTER BECAUSE ITS TOO SLOW
         threshold = self.saturation_thres
