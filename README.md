@@ -68,7 +68,7 @@ Note that the GUI uses `CTkinter` and is currently incompatible with Python 3.12
 
 See [Issues](https://github.com/tshadee/myolight-capture-device/issues) (may not be addressed).
 
-*Note that MYOLIGHT™ is not in any way commercial. The name and trademark (™) symbol is there as a jab against the _MYOLINK_. MYO-LIGHT being the "lightweight" version of the _MYOLINK_. It is as arbitrary as its creation.
+*Note that MYOLIGHT™ is not in any way commercial. The name and trademark (™) symbol is there as a jab against the [_MYOLINK_](https://ieeexplore.ieee.org/document/9799214). MYO-LIGHT being the "lightweight" version of the _MYOLINK_. It is as arbitrary as its creation.
 
 
 
